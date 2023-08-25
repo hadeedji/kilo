@@ -1,7 +1,7 @@
-CCFLAGS := -Wall -Wextra -Wpedantic -Werror -std=c99 -D_DEFAULT_SOURCE
+CFLAGS := -Wall -Wextra -Wpedantic -Werror -std=c99
 
 kilo: kilo.c
-	$(CC) $(CCFLAGS) kilo.c -o kilo
+	$(CC) $(CFLAGS) kilo.c -o kilo
 
 clean:
 	rm -f ./kilo
