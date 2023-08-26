@@ -181,7 +181,7 @@ void editor_draw_rows() {
 
         if (in_file) {
             struct EROW curr_row = E.rows[y + E.row_off];
-            int max_len = MAX(curr_row.size, E.screencols);
+            int max_len = MIN(curr_row.size, E.screencols);
 
             rb_append(E.rb, curr_row.s, max_len);
         } else if (no_file && y == E.screenrows / 2) {
