@@ -1,6 +1,5 @@
-#define _BSD_SOURCE
 #define _DEFAULT_SOURCE
-#define _GNU_SOURCE
+#define KILO_VERSION "0.0.1"
 
 #include <ctype.h>
 #include <errno.h>
@@ -16,6 +15,9 @@
 
 #define CTRL_KEY(key) ((key) & 0x1f)
 
+#define MAX(a, b) (((a)>(b))?(a):(b))
+#define MIN(a, b) (((a)<(b))?(a):(b))
+
 /*****************************************************************************/
 
 struct screen_buf;
@@ -29,11 +31,14 @@ struct erow {
 struct {
     int cx, cy;
     int screenrows, screencols;
-    int display_rows;
-    bool running;
-    struct erow row;
+    int row_off, col_off;
+
+    struct erow *rows;
+    int n_rows;
+
     struct termios orig_termios;
     struct input_buf *ib;
+    bool running;
 } E;
 
 enum KEYS {
@@ -54,15 +59,15 @@ typedef uint16_t KEY;
 /*****************************************************************************/
 
 void editor_init();
-void editor_open();
+void editor_open(char *);
+void editor_append_row(const char *, int);
 void editor_redraw_screen();
 void editor_draw_rows(struct screen_buf *);
 void editor_process_key();
 void editor_free();
 
 struct screen_buf *sb_init();
-void sb_append(struct screen_buf *, const char *);
-void sb_append_max(struct screen_buf *, const char *, int);
+void sb_append(struct screen_buf *, const char *, int);
 void sb_write(struct screen_buf *);
 void sb_free(struct screen_buf *);
 
@@ -86,9 +91,11 @@ void die(const char *);
 
 /*****************************************************************************/
 
-int main() {
+int main(int argc, char **argv) {
     editor_init();
-    editor_open();
+
+    if (argc >= 2)
+        editor_open(argv[1]);
 
     while (E.running) {
         editor_redraw_screen();
@@ -112,18 +119,40 @@ void editor_init() {
 
     E.cx = E.cy = 0;
     if (term_get_win_size(&E.screenrows, &E.screencols) == -1) die("term_get_win_size");
-    E.display_rows = 0;
+    E.row_off = E.col_off = 0;
+
+    E.n_rows = 0;
     E.running = true;
     E.ib = ib_init(128);
 }
 
-void editor_open() {
-    char *line = "hello world";
-    int line_len = (int) strlen(line);
+void editor_open(char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (!file) die("fopen");
 
-    E.row.s = line;
-    E.row.size = line_len;
-    E.display_rows = 1;
+    char *line = NULL;
+    size_t linecap = 0;
+    int linelen = -1;
+
+    while ((linelen = getline(&line, &linecap, file)) != -1) {
+        while (linelen > 0 && (line[linelen-1] == '\n' || line[linelen-1] == '\r'))
+            linelen--;
+
+        editor_append_row(line, linelen);
+
+    }
+
+    free(line);
+    fclose(file);
+}
+
+void editor_append_row(const char *s, int len) {
+    E.rows = realloc(E.rows, sizeof(struct erow) * (E.n_rows + 1));
+
+    E.rows[E.n_rows].s = malloc(len);
+    memcpy(E.rows[E.n_rows].s, s, len);
+
+    E.rows[E.n_rows++].size = len;
 }
 
 void editor_redraw_screen() {
@@ -134,7 +163,7 @@ void editor_redraw_screen() {
     sb_write(sb);
     sb_free(sb);
 
-    if (term_set_cursor_pos(E.cy + 1, E.cx + 1) == -1) die("term_set_cursor_pos");
+    if (term_set_cursor_pos(E.cy - E.row_off + 1, E.cx + 1) == -1) die("term_set_cursor_pos");
     if (term_cursor_hidden(false) == -1) die("term_cursor_hidden");
 }
 
@@ -142,12 +171,22 @@ void editor_draw_rows(struct screen_buf *sb) {
     term_set_cursor_pos(1, 1);
 
     for (int y = 0; y < E.screenrows; y++) {
-        if (y < E.display_rows) {
-            sb_append_max(sb, E.row.s, E.screencols);
-        } else sb_append(sb, "~");
+        if (y < E.screenrows && y+E.row_off < E.n_rows) {
+            sb_append(sb, E.rows[y+E.row_off].s, MIN(E.rows[y+E.row_off].size, E.screencols));
+        } else if (E.n_rows == 0 && y == E.screenrows / 2) {
+            char welcome[64];
+            int len = snprintf(welcome, sizeof(welcome), "Welcome to kilo! -- v%s", KILO_VERSION);
 
-        sb_append(sb, "\x1b[K"); // Clear rest of the line
-        if (y < E.screenrows - 1) sb_append(sb, "\r\n");
+            int padding = (E.screencols - len) / 2;
+            if (padding--)
+                sb_append(sb, "~", 1);
+            while (padding-- > 0) sb_append(sb, " ", 1);
+
+            sb_append(sb, welcome, len);
+        } else sb_append(sb, "~", 1);
+
+        sb_append(sb, "\x1b[K", 3); // Clear rest of the line
+        if (y < E.screenrows - 1) sb_append(sb, "\r\n", 2);
     }
 }
 
@@ -160,10 +199,12 @@ void editor_process_key() {
             if (E.cx > 0) E.cx--;
             break;
         case ARROW_DOWN:
-            if (E.cy < E.screenrows - 1) E.cy++;
+            if (E.cy < E.n_rows - 1) E.cy++;
+            if (E.cy > E.row_off + E.screenrows - 1) E.row_off = E.cy - E.screenrows + 1;
             break;
         case ARROW_UP:
             if (E.cy > 0) E.cy--;
+            if (E.row_off > E.cy) E.row_off = E.cy;
             break;
         case ARROW_RIGHT:
             if (E.cx < E.screencols - 1) E.cx++;
@@ -179,7 +220,7 @@ void editor_process_key() {
         case PG_UP:
         case PG_DOWN:
             for (int i = 0; i < E.screenrows; i++)
-                 ib_write(E.ib, (c == PG_UP ? ARROW_UP : ARROW_DOWN));
+                ib_write(E.ib, (c == PG_UP ? ARROW_UP : ARROW_DOWN));
             break;
 
         case CTRL_KEY('Q'):
@@ -209,14 +250,7 @@ struct screen_buf *sb_init() {
     return sb;
 }
 
-void sb_append(struct screen_buf *sb, const char *s) {
-    sb_append_max(sb, s, INT_MAX);
-}
-
-void sb_append_max(struct screen_buf *sb, const char *s, int max_size) {
-    int size = strlen(s);
-    size = (size > max_size ? max_size : size);
-
+void sb_append(struct screen_buf *sb, const char *s, int size) {
     sb->s = realloc(sb->s, sb->size + size);
     memcpy(sb->s + sb->size, s, size);
 
@@ -363,7 +397,6 @@ KEY term_read_key() {
     if (c == '\x1b') {
         char buf[8] = { '\0' };
 
-        // Inefficient but I like the way it looks
         for (int i = 0; i < (int) sizeof(buf); i++) {
             if (read(STDIN_FILENO, buf+i, 1) == 0) break;
 
