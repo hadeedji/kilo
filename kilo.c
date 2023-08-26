@@ -15,30 +15,31 @@
 
 #define CTRL_KEY(key) ((key) & 0x1f)
 
-#define MAX(a, b) (((a)>(b))?(a):(b))
-#define MIN(a, b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
 /*****************************************************************************/
 
-struct screen_buf;
+struct render_buf;
 struct input_buf;
 
-struct erow {
-    int size;
+struct EROW {
     char *s;
+    int size;
 };
 
 struct {
     int cx, cy;
     int screenrows, screencols;
     int row_off, col_off;
+    bool running;
 
-    struct erow *rows;
+    struct EROW *rows;
     int n_rows;
 
-    struct termios orig_termios;
+    struct render_buf *rb;
     struct input_buf *ib;
-    bool running;
+    struct termios orig_termios;
 } E;
 
 enum KEYS {
@@ -62,14 +63,15 @@ void editor_init();
 void editor_open(char *);
 void editor_append_row(const char *, int);
 void editor_redraw_screen();
-void editor_draw_rows(struct screen_buf *);
+void editor_draw_rows();
 void editor_process_key();
 void editor_free();
 
-struct screen_buf *sb_init();
-void sb_append(struct screen_buf *, const char *, int);
-void sb_write(struct screen_buf *);
-void sb_free(struct screen_buf *);
+struct render_buf *rb_init();
+void rb_append(struct render_buf *, const char *, int);
+void rb_write(struct render_buf *);
+void rb_clear(struct render_buf *);
+void rb_free(struct render_buf *);
 
 struct input_buf *ib_init(int);
 KEY ib_read(struct input_buf *);
@@ -85,7 +87,6 @@ int term_get_win_size(int *, int *);
 int term_get_cursor_pos(int *, int *);
 int term_set_cursor_pos(int, int);
 KEY term_read_key();
-
 
 void die(const char *);
 
@@ -115,14 +116,15 @@ void editor_init() {
     }
 
     if (term_enable_raw() == -1) die("term_enable_raw");
-
+    if (term_get_win_size(&E.screenrows, &E.screencols) == -1)
+        die("term_get_win_size");
 
     E.cx = E.cy = 0;
-    if (term_get_win_size(&E.screenrows, &E.screencols) == -1) die("term_get_win_size");
     E.row_off = E.col_off = 0;
-
     E.n_rows = 0;
     E.running = true;
+
+    E.rb = rb_init();
     E.ib = ib_init(128);
 }
 
@@ -139,7 +141,6 @@ void editor_open(char *filename) {
             linelen--;
 
         editor_append_row(line, linelen);
-
     }
 
     free(line);
@@ -147,7 +148,7 @@ void editor_open(char *filename) {
 }
 
 void editor_append_row(const char *s, int len) {
-    E.rows = realloc(E.rows, sizeof(struct erow) * (E.n_rows + 1));
+    E.rows = realloc(E.rows, sizeof(struct EROW) * (E.n_rows + 1));
 
     E.rows[E.n_rows].s = malloc(len);
     memcpy(E.rows[E.n_rows].s, s, len);
@@ -158,38 +159,48 @@ void editor_append_row(const char *s, int len) {
 void editor_redraw_screen() {
     if (term_cursor_hidden(true) == -1) die("term_cursor_hidden");
 
-    struct screen_buf *sb = sb_init();
-    editor_draw_rows(sb);
-    sb_write(sb);
-    sb_free(sb);
+    editor_draw_rows(E.rb);
+    rb_write(E.rb);
+    rb_clear(E.rb);
 
-    if (term_set_cursor_pos(E.cy - E.row_off + 1, E.cx + 1) == -1) die("term_set_cursor_pos");
-    if (term_cursor_hidden(false) == -1) die("term_cursor_hidden");
+    int row_pos = E.cy - E.row_off + 1;
+    int col_pos = E.cx - E.col_off + 1;
+    if (term_set_cursor_pos(row_pos, col_pos) == -1)
+        die("term_set_cursor_pos");
+
+    if (term_cursor_hidden(false) == -1)
+        die("term_cursor_hidden");
 }
 
-void editor_draw_rows(struct screen_buf *sb) {
+void editor_draw_rows() {
     term_set_cursor_pos(1, 1);
 
     for (int y = 0; y < E.screenrows; y++) {
-        if (y < E.screenrows && y+E.row_off < E.n_rows) {
-            sb_append(sb, E.rows[y+E.row_off].s, MIN(E.rows[y+E.row_off].size, E.screencols));
-        } else if (E.n_rows == 0 && y == E.screenrows / 2) {
+        bool in_file = y < E.n_rows - E.row_off;
+        bool no_file = E.n_rows == 0;
+
+        if (in_file) {
+            struct EROW curr_row = E.rows[y + E.row_off];
+            int max_len = MAX(curr_row.size, E.screencols);
+
+            rb_append(E.rb, curr_row.s, max_len);
+        } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
-            int len = snprintf(welcome, sizeof(welcome), "Welcome to kilo! -- v%s", KILO_VERSION);
+            int len = snprintf(welcome, sizeof(welcome),
+                               "Welcome to kilo! -- v%s", KILO_VERSION);
 
             int padding = (E.screencols - len) / 2;
-            if (padding--)
-                sb_append(sb, "~", 1);
-            while (padding-- > 0) sb_append(sb, " ", 1);
+            for (int i = 0; i < padding; i++)
+                rb_append(E.rb, (i == 0 ? "~" : " "), 1);
 
-            sb_append(sb, welcome, len);
-        } else sb_append(sb, "~", 1);
+            rb_append(E.rb, welcome, len);
+        } else rb_append(E.rb, "~", 1);
 
-        sb_append(sb, "\x1b[K", 3); // Clear rest of the line
-        if (y < E.screenrows - 1) sb_append(sb, "\r\n", 2);
+        rb_append(E.rb, "\x1b[K", 3); // Delete line to right of cursor
+        if (y < E.screenrows - 1)
+            rb_append(E.rb, "\r\n", 2);
     }
 }
-
 
 void editor_process_key() {
     KEY c = ib_read(E.ib);
@@ -236,34 +247,47 @@ void editor_free() {
 
 /*****************************************************************************/
 
-struct screen_buf {
-    int size;
+struct render_buf {
     char *s;
+    int size;
+    int capacity;
 };
 
-struct screen_buf *sb_init() {
-    struct screen_buf *sb = (struct screen_buf *) malloc(sizeof(struct screen_buf));
+struct render_buf *rb_init() {
+    size_t buf_size = sizeof(struct render_buf);
+    struct render_buf *rb = (struct render_buf *) malloc(buf_size);
 
-    sb->s = NULL;
-    sb->size = 0;
+    rb->s = NULL;
+    rb->size = 0;
+    rb->capacity = 0;
 
-    return sb;
+    return rb;
 }
 
-void sb_append(struct screen_buf *sb, const char *s, int size) {
-    sb->s = realloc(sb->s, sb->size + size);
-    memcpy(sb->s + sb->size, s, size);
+void rb_append(struct render_buf *rb, const char *s, int size) {
+    if (rb->size + size > rb->capacity) {
+        rb->s = realloc(rb->s, rb->size + size);
+        rb->capacity = rb->size + size;
+    }
 
-    sb->size += size;
+    memcpy(rb->s + rb->size, s, size);
+    rb->size += size;
 }
 
-void sb_write(struct screen_buf *sb) {
-    write(STDOUT_FILENO, sb->s, sb->size);
+void rb_write(struct render_buf *rb) {
+    write(STDOUT_FILENO, rb->s, rb->size);
 }
 
-void sb_free(struct screen_buf *sb) {
-    free(sb->s);
-    free(sb);
+void rb_clear(struct render_buf *rb) {
+    rb->capacity = rb->size;
+    rb->s = realloc(rb->s, rb->capacity);
+
+    rb->size = 0;
+}
+
+void rb_free(struct render_buf *rb) {
+    free(rb->s);
+    free(rb);
 }
 
 
