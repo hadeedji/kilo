@@ -55,19 +55,25 @@ enum KEYS {
     NOP
 };
 
+enum SCROLL_DIR {
+    SCROLL_UP,
+    SCROLL_DOWN
+};
+
 typedef uint16_t KEY;
 
 /*****************************************************************************/
 
-void editor_init();
+void editor_init(void);
 void editor_open(char *);
+void editor_redraw_screen(void);
+void editor_process_key(void);
+void editor_draw_rows(void);
 void editor_append_row(const char *, int);
-void editor_redraw_screen();
-void editor_draw_rows();
-void editor_process_key();
-void editor_free();
+void editor_scroll(enum SCROLL_DIR, int);
+void editor_free(void);
 
-struct render_buf *rb_init();
+struct render_buf *rb_init(void);
 void rb_append(struct render_buf *, const char *, int);
 void rb_write(struct render_buf *);
 void rb_clear(struct render_buf *);
@@ -79,14 +85,14 @@ void ib_write(struct input_buf *, KEY);
 bool ib_empty(struct input_buf *);
 void ib_free(struct input_buf *);
 
-int term_enable_raw();
-void term_disable_raw();
-int term_clear();
+int term_enable_raw(void);
+void term_disable_raw(void);
+int term_clear(void);
 int term_cursor_hidden(bool);
 int term_get_win_size(int *, int *);
 int term_get_cursor_pos(int *, int *);
 int term_set_cursor_pos(int, int);
-KEY term_read_key();
+KEY term_read_key(void);
 
 void die(const char *);
 
@@ -147,19 +153,10 @@ void editor_open(char *filename) {
     fclose(file);
 }
 
-void editor_append_row(const char *s, int len) {
-    E.rows = realloc(E.rows, sizeof(struct EROW) * (E.n_rows + 1));
-
-    E.rows[E.n_rows].s = malloc(len);
-    memcpy(E.rows[E.n_rows].s, s, len);
-
-    E.rows[E.n_rows++].size = len;
-}
-
 void editor_redraw_screen() {
     if (term_cursor_hidden(true) == -1) die("term_cursor_hidden");
 
-    editor_draw_rows(E.rb);
+    editor_draw_rows();
     rb_write(E.rb);
     rb_clear(E.rb);
 
@@ -172,6 +169,45 @@ void editor_redraw_screen() {
         die("term_cursor_hidden");
 }
 
+void editor_process_key() {
+    KEY c = ib_read(E.ib);
+
+    switch (c) {
+        case ARROW_LEFT:
+            E.cx = MAX(E.cx - 1, 0);
+            E.col_off = MIN(E.col_off, E.cx);
+            break;
+        case ARROW_DOWN:
+            E.cy = MIN(E.cy + 1, E.n_rows - 1);
+            E.row_off = MAX(E.row_off, E.cy - (E.screenrows - 1));
+            break;
+        case ARROW_UP:
+            E.cy = MAX(E.cy - 1, 0);
+            E.row_off = MIN(E.row_off, E.cy);
+            break;
+        case ARROW_RIGHT:
+            E.cx = MIN(E.cx + 1, INT_MAX);
+            E.col_off = MAX(E.col_off, E.cx - (E.screencols - 1));
+            break;
+
+        case HOME:
+            E.cx = E.col_off = 0;
+            break;
+        case END:
+            E.cx = E.screencols - 1;
+            break;
+
+        case PG_UP:
+        case PG_DOWN:
+            editor_scroll(c == PG_UP ? SCROLL_UP : SCROLL_DOWN, E.screenrows);
+            break;
+
+        case CTRL_KEY('Q'):
+            E.running = false;
+            break;
+    }
+}
+
 void editor_draw_rows() {
     term_set_cursor_pos(1, 1);
 
@@ -181,9 +217,9 @@ void editor_draw_rows() {
 
         if (in_file) {
             struct EROW curr_row = E.rows[y + E.row_off];
-            int max_len = MIN(curr_row.size, E.screencols);
+            int max_len = MIN(curr_row.size - E.col_off, E.screencols);
 
-            rb_append(E.rb, curr_row.s, max_len);
+            rb_append(E.rb, curr_row.s + E.col_off, MAX(max_len, 0));
         } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
             int len = snprintf(welcome, sizeof(welcome),
@@ -202,40 +238,24 @@ void editor_draw_rows() {
     }
 }
 
-void editor_process_key() {
-    KEY c = ib_read(E.ib);
+void editor_append_row(const char *s, int len) {
+    E.rows = realloc(E.rows, sizeof(struct EROW) * (E.n_rows + 1));
 
-    switch (c) {
-        case ARROW_LEFT:
-            if (E.cx > 0) E.cx--;
-            break;
-        case ARROW_DOWN:
-            if (E.cy < E.n_rows - 1) E.cy++;
-            if (E.cy > E.row_off + E.screenrows - 1) E.row_off = E.cy - E.screenrows + 1;
-            break;
-        case ARROW_UP:
-            if (E.cy > 0) E.cy--;
-            if (E.row_off > E.cy) E.row_off = E.cy;
-            break;
-        case ARROW_RIGHT:
-            if (E.cx < E.screencols - 1) E.cx++;
-            break;
+    E.rows[E.n_rows].s = malloc(len);
+    memcpy(E.rows[E.n_rows].s, s, len);
 
-        case HOME:
-            E.cx = 0;
-            break;
-        case END:
-            E.cx = E.screencols - 1;
-            break;
+    E.rows[E.n_rows++].size = len;
+}
 
-        case PG_UP:
-        case PG_DOWN:
-            for (int i = 0; i < E.screenrows; i++)
-                ib_write(E.ib, (c == PG_UP ? ARROW_UP : ARROW_DOWN));
+void editor_scroll(enum SCROLL_DIR dir, int num) {
+    switch (dir) {
+        case SCROLL_UP:
+            E.row_off = MAX(E.row_off - num, 0);
+            E.cy = MIN(E.cy, E.screenrows + E.row_off - 1);
             break;
-
-        case CTRL_KEY('Q'):
-            E.running = false;
+        case SCROLL_DOWN:
+            E.row_off = MIN(E.row_off + num, E.n_rows - E.screenrows);
+            E.cy = MAX(E.cy, E.row_off);
             break;
     }
 }
