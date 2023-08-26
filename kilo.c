@@ -4,6 +4,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -20,18 +21,23 @@
 struct screen_buf;
 struct input_buf;
 
-typedef uint16_t KEY;
+struct erow {
+    int size;
+    char *s;
+};
 
 struct {
+    int cx, cy;
+    int screenrows, screencols;
+    int display_rows;
+    bool running;
+    struct erow row;
     struct termios orig_termios;
     struct input_buf *ib;
-    int screenrows, screencols;
-    int cx, cy;
-    bool running;
 } E;
 
-enum keys {
-    HOME = 0x100 + 1,
+enum KEYS {
+    HOME = 0x100,
     DEL,
     PG_UP,
     PG_DOWN,
@@ -43,9 +49,12 @@ enum keys {
     NOP
 };
 
+typedef uint16_t KEY;
+
 /*****************************************************************************/
 
 void editor_init();
+void editor_open();
 void editor_redraw_screen();
 void editor_draw_rows(struct screen_buf *);
 void editor_process_key();
@@ -53,10 +62,11 @@ void editor_free();
 
 struct screen_buf *sb_init();
 void sb_append(struct screen_buf *, const char *);
+void sb_append_max(struct screen_buf *, const char *, int);
 void sb_write(struct screen_buf *);
 void sb_free(struct screen_buf *);
 
-struct input_buf *ib_init(size_t);
+struct input_buf *ib_init(int);
 KEY ib_read(struct input_buf *);
 void ib_write(struct input_buf *, KEY);
 bool ib_empty(struct input_buf *);
@@ -78,6 +88,7 @@ void die(const char *);
 
 int main() {
     editor_init();
+    editor_open();
 
     while (E.running) {
         editor_redraw_screen();
@@ -98,11 +109,21 @@ void editor_init() {
 
     if (term_enable_raw() == -1) die("term_enable_raw");
 
-    if (term_get_win_size(&E.screenrows, &E.screencols) == -1) die("term_get_win_size");
 
     E.cx = E.cy = 0;
-    E.ib = ib_init(128);
+    if (term_get_win_size(&E.screenrows, &E.screencols) == -1) die("term_get_win_size");
+    E.display_rows = 0;
     E.running = true;
+    E.ib = ib_init(128);
+}
+
+void editor_open() {
+    char *line = "hello world";
+    int line_len = (int) strlen(line);
+
+    E.row.s = line;
+    E.row.size = line_len;
+    E.display_rows = 1;
 }
 
 void editor_redraw_screen() {
@@ -121,7 +142,9 @@ void editor_draw_rows(struct screen_buf *sb) {
     term_set_cursor_pos(1, 1);
 
     for (int y = 0; y < E.screenrows; y++) {
-        sb_append(sb, "~");
+        if (y < E.display_rows) {
+            sb_append_max(sb, E.row.s, E.screencols);
+        } else sb_append(sb, "~");
 
         sb_append(sb, "\x1b[K"); // Clear rest of the line
         if (y < E.screenrows - 1) sb_append(sb, "\r\n");
@@ -173,8 +196,8 @@ void editor_free() {
 /*****************************************************************************/
 
 struct screen_buf {
+    int size;
     char *s;
-    size_t size;
 };
 
 struct screen_buf *sb_init() {
@@ -187,7 +210,12 @@ struct screen_buf *sb_init() {
 }
 
 void sb_append(struct screen_buf *sb, const char *s) {
+    sb_append_max(sb, s, INT_MAX);
+}
+
+void sb_append_max(struct screen_buf *sb, const char *s, int max_size) {
     int size = strlen(s);
+    size = (size > max_size ? max_size : size);
 
     sb->s = realloc(sb->s, sb->size + size);
     memcpy(sb->s + sb->size, s, size);
@@ -209,11 +237,11 @@ struct input_buf {
     KEY *carr; // Circular array
     int read_i;
     int write_i;
-    size_t capacity; // Actual capacity is one less
+    int capacity; // Actual capacity is one less
 };
 
-struct input_buf *ib_init(size_t capacity) {
-    struct input_buf *ib = (struct input_buf *) malloc(sizeof(struct input_buf));
+struct input_buf *ib_init(int capacity) {
+    struct input_buf *ib = malloc(sizeof(struct input_buf));
 
     ib->carr = (KEY *) malloc(sizeof(KEY) * capacity);
     ib->write_i = 0;
@@ -305,7 +333,7 @@ int term_get_cursor_pos(int *row, int *col) {
 
     if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;
 
-    for (size_t i = 0; i < sizeof(buf); i++) {
+    for (int i = 0; i < (int) sizeof(buf); i++) {
         if (read(STDIN_FILENO, buf+i, 1) == 0 || buf[i] == 'R') {
             buf[i] = '\0';
             break;
@@ -321,10 +349,10 @@ int term_get_cursor_pos(int *row, int *col) {
 int term_set_cursor_pos(int row, int col) {
     char buf[16];
 
-    size_t len = snprintf(buf, sizeof(buf), "\x1b[%d;%dH", row, col);
-    len = (len >= sizeof(buf) ? sizeof(buf) - 1 : len);
+    int len = snprintf(buf, sizeof(buf), "\x1b[%d;%dH", row, col);
+    len = (len >= (int) sizeof(buf) ? (int) sizeof(buf) - 1 : len);
 
-    if (write(STDOUT_FILENO, buf, len) != (ssize_t) len) return -1;
+    if ((int) write(STDOUT_FILENO, buf, len) != len) return -1;
     return 0;
 }
 
@@ -336,7 +364,7 @@ KEY term_read_key() {
         char buf[8] = { '\0' };
 
         // Inefficient but I like the way it looks
-        for (size_t i = 0; i < sizeof(buf); i++) {
+        for (int i = 0; i < (int) sizeof(buf); i++) {
             if (read(STDIN_FILENO, buf+i, 1) == 0) break;
 
             char escape_char;
