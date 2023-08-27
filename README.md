@@ -1,6 +1,15 @@
 # kilo
 
-This is my implementation of the [kilo](https://github.com/antirez/kilo) text
-editor, written by following the tutorial
-[here.](https://viewsourcecode.org/snaptoken/kilo/index.html) After I'm done, I
-may add more features on my own.
+Clone of the tiny text editor [kilo][1], written following a [tutorial][2]. Not
+an exact copy of either, and I'm once done with the tutorial I may add more
+features.
+
+## TODO
+- Improve the scrolling situation, make it consistent
+
+## References
+- [antirez/kilo][1]
+- [Build Your Own Text Editor][2]
+
+[1]: https://github.com/antirez/kilo
+[2]: https://viewsourcecode.org/snaptoken/kilo/index.html
