@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,6 +14,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CTRL_KEY(key) ((key) & 0x1f)
@@ -33,6 +35,7 @@ struct EROW {
 };
 
 struct {
+    char *filename;
     int cx, cy;
     int rx;
     int screenrows, screencols;
@@ -41,6 +44,9 @@ struct {
 
     struct EROW *rows;
     int n_rows;
+
+    char message[256];
+    time_t message_time;
 
     struct termios orig_termios;
 } E;
@@ -64,11 +70,14 @@ typedef uint16_t KEY;
 /*****************************************************************************/
 
 void editor_init(void);
-void editor_open(char *);
+void editor_open(const char *);
+void editor_append_row(const char *, int);
+void editor_set_message(const char *, ...);
 
 void editor_redraw_screen(void);
-void editor_draw_rows(void);
-void editor_append_row(const char *, int);
+void editor_draw_rows(struct string_buf *);
+void editor_draw_statusbar(struct string_buf *);
+void editor_draw_messagebar(struct string_buf *);
 
 void editor_process_key(void);
 void editor_move_cursor(KEY);
@@ -80,7 +89,6 @@ struct string_buf *sb_init(void);
 char *sb_get_string(struct string_buf *);
 int sb_get_size(struct string_buf *);
 void sb_append(struct string_buf *, const char *, int);
-void sb_clear(struct string_buf *);
 void sb_free(struct string_buf *);
 
 int term_enable_raw(void);
@@ -123,15 +131,24 @@ void editor_init() {
     if (term_get_win_size(&E.screenrows, &E.screencols) == -1)
         die("term_get_win_size");
 
+    E.filename = NULL;
     E.cx = E.cy = 0;
     E.rx = 0;
+    E.screenrows -= 2;
     E.row_off = E.col_off = 0;
-    E.n_rows = 0;
     E.running = true;
+
+    E.rows = NULL;
+    E.n_rows = 0;
+
+    editor_set_message("Welcome to kilo. Press CTRL-Q to quit.");
 }
 
-void editor_open(char *filename) {
-    FILE *file = fopen(filename, "r");
+void editor_open(const char *filename) {
+    free(E.filename);
+    E.filename = strdup(filename);
+
+    FILE *file = fopen(E.filename, "r");
     if (!file) die("fopen");
 
     char *line = NULL;
@@ -147,56 +164,6 @@ void editor_open(char *filename) {
 
     free(line);
     fclose(file);
-}
-
-
-void editor_redraw_screen() {
-    if (term_cursor_hidden(true) == -1) die("term_cursor_hidden");
-
-    editor_draw_rows();
-
-    int row_pos = E.cy - E.row_off + 1;
-    int col_pos = E.rx - E.col_off + 1;
-    if (term_set_cursor_pos(row_pos, col_pos) == -1)
-        die("term_set_cursor_pos");
-
-    if (term_cursor_hidden(false) == -1)
-        die("term_cursor_hidden");
-}
-
-void editor_draw_rows() {
-    static struct string_buf *draw_buf = NULL;
-    if (!draw_buf) draw_buf = sb_init();
-    sb_clear(draw_buf);
-
-    term_set_cursor_pos(1, 1);
-    for (int y = 0; y < E.screenrows; y++) {
-        bool in_file = y < E.n_rows - E.row_off;
-        bool no_file = E.n_rows == 0;
-
-        if (in_file) {
-            struct EROW curr_row = E.rows[y + E.row_off];
-            int max_len = MIN(curr_row.n_rchars - E.col_off, E.screencols);
-
-            sb_append(draw_buf, curr_row.rchars + E.col_off, MAX(max_len, 0));
-        } else if (no_file && y == E.screenrows / 2) {
-            char welcome[64];
-            int len = snprintf(welcome, sizeof(welcome),
-                               "Welcome to kilo! -- v%s", KILO_VERSION);
-
-            int padding = (E.screencols - len) / 2;
-            for (int i = 0; i < padding; i++)
-                sb_append(draw_buf, (i == 0 ? "~" : " "), 1);
-
-            sb_append(draw_buf, welcome, len);
-        } else sb_append(draw_buf, "~", 1);
-
-        sb_append(draw_buf, "\x1b[K", 3); // Delete line to right of cursor
-        if (y < E.screenrows - 1)
-            sb_append(draw_buf, "\r\n", 2);
-    }
-
-    write(STDIN_FILENO, sb_get_string(draw_buf), sb_get_size(draw_buf));
 }
 
 void editor_append_row(const char *s, int len) {
@@ -228,6 +195,96 @@ void editor_append_row(const char *s, int len) {
     sb_free(sb);
 
     E.n_rows++;
+}
+
+void editor_set_message(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(E.message, sizeof(E.message), fmt, ap);
+  va_end(ap);
+
+  E.message_time = time(NULL);
+}
+
+
+void editor_redraw_screen() {
+    if (term_cursor_hidden(true) == -1)
+        die("term_cursor_hidden");
+
+
+    struct string_buf *draw_buf = sb_init();
+
+    editor_draw_rows(draw_buf);
+    editor_draw_statusbar(draw_buf);
+    editor_draw_messagebar(draw_buf);
+
+    write(STDIN_FILENO, sb_get_string(draw_buf), sb_get_size(draw_buf));
+    sb_free(draw_buf);
+
+    int row_pos = E.cy - E.row_off + 1;
+    int col_pos = E.rx - E.col_off + 1;
+    if (term_set_cursor_pos(row_pos, col_pos) == -1)
+        die("term_set_cursor_pos");
+
+    if (term_cursor_hidden(false) == -1)
+        die("term_cursor_hidden");
+}
+
+void editor_draw_rows(struct string_buf *draw_buf) {
+    term_set_cursor_pos(1, 1);
+    for (int y = 0; y < E.screenrows; y++) {
+        bool in_file = y < E.n_rows - E.row_off;
+        bool no_file = E.n_rows == 0;
+
+        if (in_file) {
+            struct EROW curr_row = E.rows[y + E.row_off];
+            int max_len = MIN(curr_row.n_rchars - E.col_off, E.screencols);
+
+            sb_append(draw_buf, curr_row.rchars + E.col_off, MAX(max_len, 0));
+        } else if (no_file && y == E.screenrows / 2) {
+            char welcome[64];
+            int len = snprintf(welcome, sizeof(welcome),
+                               "Welcome to kilo! -- v%s", KILO_VERSION);
+
+            int padding = (E.screencols - len) / 2;
+            for (int i = 0; i < padding; i++)
+                sb_append(draw_buf, (i == 0 ? "~" : " "), 1);
+
+            sb_append(draw_buf, welcome, len);
+        } else sb_append(draw_buf, "~", 1);
+
+        sb_append(draw_buf, "\x1b[K\r\n", 5);
+    }
+}
+
+void editor_draw_statusbar(struct string_buf *draw_buf) {
+    char *status_buf = malloc(E.screencols), buf[256];
+    int len;
+
+    memset(status_buf, ' ', E.screencols);
+
+    sb_append(draw_buf, "\x1b[7m", 4);
+
+    len = sprintf(buf, "%s -- %d lines",
+                  (E.filename ? E.filename : "[NO NAME]"), E.n_rows);
+    memcpy(status_buf, buf, len);
+
+    len = sprintf(buf, "%d:%d", E.cy + 1, E.rx + 1);
+    memcpy(status_buf + E.screencols - len, buf, len);
+
+    sb_append(draw_buf, status_buf, E.screencols);
+    sb_append(draw_buf, "\x1b[m\r\n", 5);
+
+    free(status_buf);
+}
+void editor_draw_messagebar(struct string_buf *draw_buf) {
+    sb_append(draw_buf, "\x1b[K", 3);
+
+    int len = strlen(E.message);
+    if (len > E.screencols) len = E.screencols;
+
+    if (len && time(NULL) - E.message_time < 5)
+        sb_append(draw_buf, E.message, len);
 }
 
 
@@ -356,47 +413,37 @@ int editor_get_cx(int rx_target) {
 /*****************************************************************************/
 
 struct string_buf {
-    char *s;
-    int size;
-    int capacity;
+    char *chars;
+    int n_chars;
 };
 
 struct string_buf *sb_init() {
     size_t buf_size = sizeof(struct string_buf);
     struct string_buf *sb = (struct string_buf *) malloc(buf_size);
 
-    sb->s = NULL;
-    sb->size = 0;
-    sb->capacity = 0;
+    sb->chars = NULL;
+    sb->n_chars = 0;
 
     return sb;
 }
 
 char *sb_get_string(struct string_buf *sb) {
-    return sb->s;
+    return sb->chars;
 }
 
 int sb_get_size(struct string_buf *sb) {
-    return sb->size;
+    return sb->n_chars;
 }
 
-void sb_append(struct string_buf *sb, const char *s, int size) {
-    if (sb->size + size > sb->capacity) {
-        sb->s = realloc(sb->s, sb->size + size);
-        sb->capacity = sb->size + size;
-    }
+void sb_append(struct string_buf *sb, const char *chars, int n_chars) {
+    sb->chars = realloc(sb->chars, sb->n_chars + n_chars);
 
-    memcpy(sb->s + sb->size, s, size);
-    sb->size += size;
-}
-
-void sb_clear(struct string_buf *sb) {
-    // Q: How should capacity be changed here?
-    sb->size = 0;
+    memcpy(sb->chars + sb->n_chars, chars, n_chars);
+    sb->n_chars += n_chars;
 }
 
 void sb_free(struct string_buf *sb) {
-    free(sb->s);
+    free(sb->chars);
     free(sb);
 }
 
@@ -452,7 +499,7 @@ int term_get_win_size(int *row, int *col) {
 }
 
 int term_get_cursor_pos(int *row, int *col) {
-    char buf[32];
+    char buf[16];
 
     if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;
 

@@ -1,4 +1,4 @@
-CFLAGS := -ggdb -Wall -Wextra -Werror -Wstrict-prototypes -std=c99
+CFLAGS := -ggdb -Wall -Wextra -Wstrict-prototypes -std=c99
 
 kilo: kilo.c
 	$(CC) $(CFLAGS) kilo.c -o kilo
