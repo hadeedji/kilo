@@ -1,5 +1,7 @@
 #define _DEFAULT_SOURCE
+
 #define KILO_VERSION "0.0.1"
+#define KILO_TAB_STOP 4
 
 #include <ctype.h>
 #include <errno.h>
@@ -20,18 +22,19 @@
 
 /*****************************************************************************/
 
-struct render_buf;
-struct input_buf;
+struct string_buf;
 
 struct EROW {
     char *chars;
     int n_chars;
-    char *render;
-    int rsize;
+
+    char *rchars;
+    int n_rchars;
 };
 
 struct {
     int cx, cy;
+    int rx;
     int screenrows, screencols;
     int row_off, col_off;
     bool running;
@@ -39,12 +42,11 @@ struct {
     struct EROW *rows;
     int n_rows;
 
-    struct render_buf *rb;
-    struct input_buf *ib;
     struct termios orig_termios;
 } E;
 
 enum KEYS {
+    TAB = 9,
     HOME = 0x100,
     DEL,
     PG_UP,
@@ -57,17 +59,11 @@ enum KEYS {
     NOP
 };
 
-enum SCROLL_DIR {
-    SCROLL_UP,
-    SCROLL_DOWN
-};
-
 typedef uint16_t KEY;
 
 /*****************************************************************************/
 
 void editor_init(void);
-void editor_free(void);
 void editor_open(char *);
 
 void editor_redraw_screen(void);
@@ -77,18 +73,15 @@ void editor_append_row(const char *, int);
 void editor_process_key(void);
 void editor_move_cursor(KEY);
 void editor_adjust_viewport(void);
+int editor_get_rx(int);
+int editor_get_cx(int);
 
-struct render_buf *rb_init(void);
-void rb_append(struct render_buf *, const char *, int);
-void rb_write(struct render_buf *);
-void rb_clear(struct render_buf *);
-void rb_free(struct render_buf *);
-
-struct input_buf *ib_init(int);
-KEY ib_read(struct input_buf *);
-void ib_write(struct input_buf *, KEY);
-bool ib_empty(struct input_buf *);
-void ib_free(struct input_buf *);
+struct string_buf *sb_init(void);
+char *sb_get_string(struct string_buf *);
+int sb_get_size(struct string_buf *);
+void sb_append(struct string_buf *, const char *, int);
+void sb_clear(struct string_buf *);
+void sb_free(struct string_buf *);
 
 int term_enable_raw(void);
 void term_disable_raw(void);
@@ -114,7 +107,7 @@ int main(int argc, char **argv) {
         editor_process_key();
     }
 
-    editor_free();
+    term_clear();
     return 0;
 }
 
@@ -131,17 +124,10 @@ void editor_init() {
         die("term_get_win_size");
 
     E.cx = E.cy = 0;
+    E.rx = 0;
     E.row_off = E.col_off = 0;
     E.n_rows = 0;
     E.running = true;
-
-    E.rb = rb_init();
-    E.ib = ib_init(128);
-}
-
-void editor_free() {
-    term_clear();
-    ib_free(E.ib);
 }
 
 void editor_open(char *filename) {
@@ -168,11 +154,9 @@ void editor_redraw_screen() {
     if (term_cursor_hidden(true) == -1) die("term_cursor_hidden");
 
     editor_draw_rows();
-    rb_write(E.rb);
-    rb_clear(E.rb);
 
     int row_pos = E.cy - E.row_off + 1;
-    int col_pos = E.cx - E.col_off + 1;
+    int col_pos = E.rx - E.col_off + 1;
     if (term_set_cursor_pos(row_pos, col_pos) == -1)
         die("term_set_cursor_pos");
 
@@ -181,17 +165,20 @@ void editor_redraw_screen() {
 }
 
 void editor_draw_rows() {
-    term_set_cursor_pos(1, 1);
+    static struct string_buf *draw_buf = NULL;
+    if (!draw_buf) draw_buf = sb_init();
+    sb_clear(draw_buf);
 
+    term_set_cursor_pos(1, 1);
     for (int y = 0; y < E.screenrows; y++) {
         bool in_file = y < E.n_rows - E.row_off;
         bool no_file = E.n_rows == 0;
 
         if (in_file) {
             struct EROW curr_row = E.rows[y + E.row_off];
-            int max_len = MIN(curr_row.n_chars - E.col_off, E.screencols);
+            int max_len = MIN(curr_row.n_rchars - E.col_off, E.screencols);
 
-            rb_append(E.rb, curr_row.chars + E.col_off, MAX(max_len, 0));
+            sb_append(draw_buf, curr_row.rchars + E.col_off, MAX(max_len, 0));
         } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
             int len = snprintf(welcome, sizeof(welcome),
@@ -199,29 +186,53 @@ void editor_draw_rows() {
 
             int padding = (E.screencols - len) / 2;
             for (int i = 0; i < padding; i++)
-                rb_append(E.rb, (i == 0 ? "~" : " "), 1);
+                sb_append(draw_buf, (i == 0 ? "~" : " "), 1);
 
-            rb_append(E.rb, welcome, len);
-        } else rb_append(E.rb, "~", 1);
+            sb_append(draw_buf, welcome, len);
+        } else sb_append(draw_buf, "~", 1);
 
-        rb_append(E.rb, "\x1b[K", 3); // Delete line to right of cursor
+        sb_append(draw_buf, "\x1b[K", 3); // Delete line to right of cursor
         if (y < E.screenrows - 1)
-            rb_append(E.rb, "\r\n", 2);
+            sb_append(draw_buf, "\r\n", 2);
     }
+
+    write(STDIN_FILENO, sb_get_string(draw_buf), sb_get_size(draw_buf));
 }
 
 void editor_append_row(const char *s, int len) {
     E.rows = realloc(E.rows, sizeof(struct EROW) * (E.n_rows + 1));
+    struct EROW *new_row = E.rows + E.n_rows;
 
-    E.rows[E.n_rows].chars = malloc(len);
-    memcpy(E.rows[E.n_rows].chars, s, len);
+    new_row->chars = malloc(len);
+    new_row->n_chars = len;
 
-    E.rows[E.n_rows++].n_chars = len;
+    struct string_buf *sb = sb_init();
+    for (int i = 0; i < len; i++) {
+        new_row->chars[i] = s[i];
+
+        switch (s[i]) {
+            case TAB: {
+                int tabs = KILO_TAB_STOP - (sb_get_size(sb) % KILO_TAB_STOP);
+                while (tabs--) sb_append(sb, " ", 1);
+                break;
+            }
+            default:
+                sb_append(sb, s+i, 1);
+        }
+    }
+
+    new_row->rchars = malloc(sb_get_size(sb));
+    new_row->n_rchars = sb_get_size(sb);
+    memcpy(new_row->rchars, sb_get_string(sb), sb_get_size(sb));
+
+    sb_free(sb);
+
+    E.n_rows++;
 }
 
 
 void editor_process_key() {
-    KEY c = ib_read(E.ib);
+    KEY c = term_read_key();
 
     switch (c) {
         case ARROW_LEFT:
@@ -233,7 +244,6 @@ void editor_process_key() {
         case PG_UP:
         case PG_DOWN:
             editor_move_cursor(c);
-            editor_adjust_viewport();
             break;
 
         case CTRL_KEY('Q'):
@@ -243,7 +253,7 @@ void editor_process_key() {
 }
 
 void editor_move_cursor(KEY key) {
-    struct EROW *row = (E.cy < E.n_rows) ? E.rows + E.cy : NULL;
+    int max_x = (E.cy < E.n_rows ? E.rows[E.cy].n_chars : 0);
 
     switch (key) {
         case ARROW_LEFT:
@@ -257,7 +267,7 @@ void editor_move_cursor(KEY key) {
             if (E.cy > 0) E.cy--;
             break;
         case ARROW_RIGHT:
-            if (E.cx < (row ? row->n_chars : 0)) E.cx++;
+            if (E.cx < max_x) E.cx++;
             else if (E.cy < E.n_rows) {
                 E.cx = 0;
                 E.cy++;
@@ -268,7 +278,7 @@ void editor_move_cursor(KEY key) {
             E.cx = 0;
             break;
         case END:
-            E.cx = row ? row->n_chars : 0;
+            E.cx = max_x;
             break;
 
         case PG_UP:
@@ -281,114 +291,113 @@ void editor_move_cursor(KEY key) {
             break;
     }
 
-    // TODO: implement this vim style
-    row = (E.cy < E.n_rows) ? E.rows + E.cy : NULL;
-    if (E.cx > (row ? row->n_chars : 0))
-        E.cx = (row ? row->n_chars : 0);
+    static int saved_rx = 0;
+    bool horizontal = (key == ARROW_LEFT || key == ARROW_RIGHT ||
+        key == HOME || key == END);
+    if (horizontal) saved_rx = editor_get_rx(E.cx);
+    else E.cx = editor_get_cx(saved_rx);
+
+    max_x = (E.cy < E.n_rows ? E.rows[E.cy].n_chars : 0);
+    if (E.cx > max_x)
+        E.cx = max_x;
+
+    E.rx = editor_get_rx(E.cx);
+    editor_adjust_viewport();
 }
 
 void editor_adjust_viewport() {
-    if (E.row_off > E.cy)
-        E.row_off = E.cy;
+    int max_row_off = E.cy;
+    if (E.row_off > max_row_off)
+        E.row_off = max_row_off;
 
-    if (E.col_off > E.cx)
-        E.col_off = E.cx;
+    int max_col_off = E.rx;
+    if (E.col_off > max_col_off)
+        E.col_off = max_col_off;
 
-    if (E.row_off < E.cy - (E.screenrows - 1))
-        E.row_off = E.cy - (E.screenrows - 1);
+    int min_row_off = E.cy - (E.screenrows - 1);
+    if (E.row_off < min_row_off)
+        E.row_off = min_row_off;
 
-    if (E.col_off < E.cx - (E.screencols - 1))
-        E.col_off = E.cx - (E.screencols - 1);
+    int min_col_off = E.rx - (E.screencols - 1);
+    if (E.col_off < min_col_off)
+        E.col_off = min_col_off;
+}
+
+int editor_get_rx(int cx) {
+    if (E.cy >= E.n_rows) return 0;
+    int rx = 0;
+
+    struct EROW *row = E.rows+E.cy;
+    for (int i = 0; i < MIN(cx, row->n_chars); i++) {
+        if (row->chars[i] == TAB)
+            rx += KILO_TAB_STOP - (rx % KILO_TAB_STOP);
+        else rx++;
+    }
+
+    return rx;
+}
+
+int editor_get_cx(int rx_target) {
+    if (E.cy >= E.n_rows) return 0;
+    int cx = 0, rx = 0;
+
+    struct EROW *row = E.rows+E.cy;
+    while (rx < rx_target && cx < row->n_chars) {
+        if (row->chars[cx] == TAB) {
+            rx += KILO_TAB_STOP - (rx % KILO_TAB_STOP);
+        } else rx++;
+
+        cx++;
+    }
+
+    return (rx >= rx_target ? cx : row->n_chars);
 }
 
 /*****************************************************************************/
 
-struct render_buf {
+struct string_buf {
     char *s;
     int size;
     int capacity;
 };
 
-struct render_buf *rb_init() {
-    size_t buf_size = sizeof(struct render_buf);
-    struct render_buf *rb = (struct render_buf *) malloc(buf_size);
+struct string_buf *sb_init() {
+    size_t buf_size = sizeof(struct string_buf);
+    struct string_buf *sb = (struct string_buf *) malloc(buf_size);
 
-    rb->s = NULL;
-    rb->size = 0;
-    rb->capacity = 0;
+    sb->s = NULL;
+    sb->size = 0;
+    sb->capacity = 0;
 
-    return rb;
+    return sb;
 }
 
-void rb_append(struct render_buf *rb, const char *s, int size) {
-    if (rb->size + size > rb->capacity) {
-        rb->s = realloc(rb->s, rb->size + size);
-        rb->capacity = rb->size + size;
+char *sb_get_string(struct string_buf *sb) {
+    return sb->s;
+}
+
+int sb_get_size(struct string_buf *sb) {
+    return sb->size;
+}
+
+void sb_append(struct string_buf *sb, const char *s, int size) {
+    if (sb->size + size > sb->capacity) {
+        sb->s = realloc(sb->s, sb->size + size);
+        sb->capacity = sb->size + size;
     }
 
-    memcpy(rb->s + rb->size, s, size);
-    rb->size += size;
+    memcpy(sb->s + sb->size, s, size);
+    sb->size += size;
 }
 
-void rb_write(struct render_buf *rb) {
-    write(STDOUT_FILENO, rb->s, rb->size);
+void sb_clear(struct string_buf *sb) {
+    // Q: How should capacity be changed here?
+    sb->size = 0;
 }
 
-void rb_clear(struct render_buf *rb) {
-    rb->capacity = rb->size;
-    rb->s = realloc(rb->s, rb->capacity);
-
-    rb->size = 0;
-}
-
-void rb_free(struct render_buf *rb) {
-    free(rb->s);
-    free(rb);
-}
-
-
-struct input_buf {
-    KEY *carr; // Circular array
-    int read_i;
-    int write_i;
-    int capacity; // Actual capacity is one less
-};
-
-struct input_buf *ib_init(int capacity) {
-    struct input_buf *ib = malloc(sizeof(struct input_buf));
-
-    ib->carr = (KEY *) malloc(sizeof(KEY) * capacity);
-    ib->write_i = 0;
-    ib->read_i  = 0;
-    ib->capacity = capacity;
-
-    return ib;
-}
-
-void ib_write(struct input_buf *ib, KEY key) {
-    if ((ib->write_i + 1) % (int) ib->capacity == ib->read_i) // Buffer full
-        die("ib_write");
-
-    ib->carr[ib->write_i] = key;
-    ib->write_i = (ib->write_i + 1) % ib->capacity;
-}
-
-KEY ib_read(struct input_buf *ib) {
-    if (ib_empty(ib)) ib_write(ib, term_read_key());
-
-    KEY key = ib->carr[ib->read_i];
-    ib->read_i = (ib->read_i + 1) % ib->capacity;
-
-    return key;
-}
-
-bool ib_empty(struct input_buf *ib) {
-    return ib->write_i == ib->read_i;
-}
-
-void ib_free(struct input_buf *ib) {
-    free(ib->carr);
-    free(ib);
+void sb_free(struct string_buf *sb) {
+    free(sb->s);
+    free(sb);
 }
 
 /*****************************************************************************/
@@ -525,4 +534,3 @@ void die(const char *s) {
     perror(s);
     exit(1);
 }
-
