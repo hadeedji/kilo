@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
 
 /*****************************************************************************/
 
-void editor_init() {
+void editor_init(void) {
     if (!isatty(STDIN_FILENO)) {
         printf("kilo only supports a terminal at standard in. Exiting.");
         exit(1);
@@ -207,7 +207,7 @@ void editor_set_message(const char *fmt, ...) {
 }
 
 
-void editor_redraw_screen() {
+void editor_redraw_screen(void) {
     if (term_cursor_hidden(true) == -1)
         die("term_cursor_hidden");
 
@@ -288,7 +288,7 @@ void editor_draw_messagebar(struct string_buf *draw_buf) {
 }
 
 
-void editor_process_key() {
+void editor_process_key(void) {
     KEY c = term_read_key();
 
     switch (c) {
@@ -362,7 +362,7 @@ void editor_move_cursor(KEY key) {
     editor_adjust_viewport();
 }
 
-void editor_adjust_viewport() {
+void editor_adjust_viewport(void) {
     int max_row_off = E.cy;
     if (E.row_off > max_row_off)
         E.row_off = max_row_off;
@@ -417,7 +417,7 @@ struct string_buf {
     int n_chars;
 };
 
-struct string_buf *sb_init() {
+struct string_buf *sb_init(void) {
     size_t buf_size = sizeof(struct string_buf);
     struct string_buf *sb = (struct string_buf *) malloc(buf_size);
 
@@ -449,7 +449,7 @@ void sb_free(struct string_buf *sb) {
 
 /*****************************************************************************/
 
-int term_enable_raw() {
+int term_enable_raw(void) {
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) return -1;
     atexit(term_disable_raw);
 
@@ -464,12 +464,12 @@ int term_enable_raw() {
     return 0;
 }
 
-void term_disable_raw() {
+void term_disable_raw(void) {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
         die ("term_disable_raw");
 }
 
-int term_clear() {
+int term_clear(void) {
     if (write(STDOUT_FILENO, "\x1b[2J", 4) != 4) return -1;
     if (write(STDOUT_FILENO, "\x1b[H", 3) != 3) return -1;
     return 0;
@@ -526,7 +526,7 @@ int term_set_cursor_pos(int row, int col) {
     return 0;
 }
 
-KEY term_read_key() {
+KEY term_read_key(void) {
     char c;
     while (read(STDIN_FILENO, &c, 1) == 0);
 

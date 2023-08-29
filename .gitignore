@@ -1,2 +1,5 @@
 .nvim.lua
 kilo
+
+compile_commands.json
+.ccls-cache
