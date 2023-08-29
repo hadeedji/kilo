@@ -3,9 +3,6 @@
 #define KILO_VERSION "0.0.1"
 #define KILO_TAB_STOP 4
 
-#include <ctype.h>
-#include <errno.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
