@@ -154,7 +154,7 @@ void editor_set_message(const char *fmt, ...) {
 
 
 void editor_redraw_screen(void) {
-    if (terminal_cursor_visibility(true) == -1)
+    if (terminal_cursor_visibility(CURSOR_HIDDEN) == -1)
         die("term_cursor_hidden");
 
 
@@ -172,7 +172,7 @@ void editor_redraw_screen(void) {
     if (terminal_set_cursor_pos(row_pos, col_pos) == -1)
         die("term_set_cursor_pos");
 
-    if (terminal_cursor_visibility(false) == -1)
+    if (terminal_cursor_visibility(CURSOR_SHOWN) == -1)
         die("term_cursor_hidden");
 }
 
