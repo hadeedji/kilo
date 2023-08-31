@@ -1,6 +1,5 @@
 build/
 kilo
 
-.ccls-cache
-.nvim.lua
+.cache
 compile_commands.json

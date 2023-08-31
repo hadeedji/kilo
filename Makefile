@@ -3,8 +3,9 @@ OBJS := $(SRCS:src/%.c=build/%.o)
 DEPS := $(OBJS:%.o=%.d)
 
 WARNING_FLAGS := -Wall -Wextra
-INCLUDE_FLAGS := -I headers
+INCLUDE_FLAGS := -I include
 
+CC := clang
 CFLAGS := $(WARNING_FLAGS) $(INCLUDE_FLAGS) -MMD -MP -std=c99
 
 kilo: $(OBJS)

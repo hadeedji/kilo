@@ -4,15 +4,13 @@
 #define KILO_TAB_STOP 4
 
 #include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <termios.h>
-#include <time.h>
 #include <unistd.h>
+
+#include "kilo.h"
+#include "terminal.h"
 
 #define CTRL_KEY(key) ((key) & 0x1f)
 
@@ -31,38 +29,7 @@ struct EROW {
     int n_rchars;
 };
 
-struct {
-    char *filename;
-    int cx, cy;
-    int rx;
-    int screenrows, screencols;
-    int row_off, col_off;
-    bool running;
-
-    struct EROW *rows;
-    int n_rows;
-
-    char message[256];
-    time_t message_time;
-
-    struct termios orig_termios;
-} E;
-
-enum KEYS {
-    TAB = 9,
-    HOME = 0x100,
-    DEL,
-    PG_UP,
-    PG_DOWN,
-    END,
-    ARROW_UP,
-    ARROW_DOWN,
-    ARROW_LEFT,
-    ARROW_RIGHT,
-    NOP
-};
-
-typedef uint16_t KEY;
+struct editor_state E;
 
 /*****************************************************************************/
 
@@ -87,17 +54,6 @@ char *sb_get_string(struct string_buf *);
 int sb_get_size(struct string_buf *);
 void sb_append(struct string_buf *, const char *, int);
 void sb_free(struct string_buf *);
-
-int term_enable_raw(void);
-void term_disable_raw(void);
-int term_clear(void);
-int term_cursor_hidden(bool);
-int term_get_win_size(int *, int *);
-int term_get_cursor_pos(int *, int *);
-int term_set_cursor_pos(int, int);
-KEY term_read_key(void);
-
-void die(const char *);
 
 /*****************************************************************************/
 
@@ -442,132 +398,6 @@ void sb_append(struct string_buf *sb, const char *chars, int n_chars) {
 void sb_free(struct string_buf *sb) {
     free(sb->chars);
     free(sb);
-}
-
-/*****************************************************************************/
-
-int term_enable_raw(void) {
-    if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) return -1;
-    atexit(term_disable_raw);
-
-    struct termios raw = E.orig_termios;
-    cfmakeraw(&raw);
-
-    raw.c_cc[VMIN]  = 0;
-    raw.c_cc[VTIME] = 10;
-
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) return -1;
-
-    return 0;
-}
-
-void term_disable_raw(void) {
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
-        die ("term_disable_raw");
-}
-
-int term_clear(void) {
-    if (write(STDOUT_FILENO, "\x1b[2J", 4) != 4) return -1;
-    if (write(STDOUT_FILENO, "\x1b[H", 3) != 3) return -1;
-    return 0;
-
-}
-
-int term_cursor_hidden(bool hidden) {
-    if (write(STDOUT_FILENO, (hidden ? "\x1b[?25l" : "\x1b[?25h"), 6) != 6)
-        return -1;
-
-    return 0;
-}
-
-int term_get_win_size(int *row, int *col) {
-    struct winsize ws;
-
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col != 0) {
-        *row = ws.ws_row;
-        *col = ws.ws_col;
-
-        return 0;
-    } else {
-        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
-
-        return term_get_cursor_pos(row, col);
-    }
-}
-
-int term_get_cursor_pos(int *row, int *col) {
-    char buf[16];
-
-    if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;
-
-    for (int i = 0; i < (int) sizeof(buf); i++) {
-        if (read(STDIN_FILENO, buf+i, 1) == 0 || buf[i] == 'R') {
-            buf[i] = '\0';
-            break;
-        }
-    }
-
-    if (sscanf(buf, "\x1b[%d;%d", row, col) == EOF)
-        return -1;
-
-    return 0;
-}
-
-int term_set_cursor_pos(int row, int col) {
-    char buf[16];
-
-    int len = snprintf(buf, sizeof(buf), "\x1b[%d;%dH", row, col);
-    len = (len >= (int) sizeof(buf) ? (int) sizeof(buf) - 1 : len);
-
-    if ((int) write(STDOUT_FILENO, buf, len) != len) return -1;
-    return 0;
-}
-
-KEY term_read_key(void) {
-    char c;
-    while (read(STDIN_FILENO, &c, 1) == 0);
-
-    if (c == '\x1b') {
-        char buf[8] = { '\0' };
-
-        for (int i = 0; i < (int) sizeof(buf); i++) {
-            if (read(STDIN_FILENO, buf+i, 1) == 0) break;
-
-            char escape_char;
-            if (sscanf(buf, "[%c~", &escape_char) != EOF) {
-                switch (escape_char) {
-                    case 'A': return ARROW_UP;
-                    case 'B': return ARROW_DOWN;
-                    case 'C': return ARROW_RIGHT;
-                    case 'D': return ARROW_LEFT;
-                    case 'H': return HOME;
-                    case 'F': return END;
-                }
-            }
-
-            int escape_int;
-            if (sscanf(buf, "[%d~", &escape_int) != EOF) {
-                switch (escape_int) {
-                    case 1:
-                    case 7:
-                        return HOME;
-                    case 3:
-                        return DEL;
-                    case 4:
-                    case 8:
-                        return END;
-                    case 5:
-                        return PG_UP;
-                    case 6:
-                        return PG_DOWN;
-                }
-            }
-        }
-
-        return NOP;
-    }
-
-    return (KEY) c;
 }
 
 /*****************************************************************************/
