@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "kilo.h"
+#include "append_buf.h"
 #include "terminal.h"
 
 #define CTRL_KEY(key) ((key) & 0x1f)
@@ -18,8 +19,6 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 /*****************************************************************************/
-
-struct string_buf;
 
 struct EROW {
     char *chars;
@@ -39,21 +38,15 @@ void editor_append_row(const char *, int);
 void editor_set_message(const char *, ...);
 
 void editor_redraw_screen(void);
-void editor_draw_rows(struct string_buf *);
-void editor_draw_statusbar(struct string_buf *);
-void editor_draw_messagebar(struct string_buf *);
+void editor_draw_rows(struct append_buf *);
+void editor_draw_statusbar(struct append_buf *);
+void editor_draw_messagebar(struct append_buf *);
 
 void editor_process_key(void);
 void editor_move_cursor(KEY);
 void editor_adjust_viewport(void);
 int editor_get_rx(int);
 int editor_get_cx(int);
-
-struct string_buf *sb_init(void);
-char *sb_get_string(struct string_buf *);
-int sb_get_size(struct string_buf *);
-void sb_append(struct string_buf *, const char *, int);
-void sb_free(struct string_buf *);
 
 /*****************************************************************************/
 
@@ -68,7 +61,7 @@ int main(int argc, char **argv) {
         editor_process_key();
     }
 
-    term_clear();
+    terminal_clear();
     return 0;
 }
 
@@ -80,8 +73,8 @@ void editor_init(void) {
         exit(1);
     }
 
-    if (term_enable_raw() == -1) die("term_enable_raw");
-    if (term_get_win_size(&E.screenrows, &E.screencols) == -1)
+    if (terminal_enable_raw() == -1) die("term_enable_raw");
+    if (terminal_get_win_size(&E.screenrows, &E.screencols) == -1)
         die("term_get_win_size");
 
     E.filename = NULL;
@@ -126,26 +119,26 @@ void editor_append_row(const char *s, int len) {
     new_row->chars = malloc(len);
     new_row->n_chars = len;
 
-    struct string_buf *sb = sb_init();
+    struct append_buf *sb = ab_init();
     for (int i = 0; i < len; i++) {
         new_row->chars[i] = s[i];
 
         switch (s[i]) {
             case TAB: {
-                int tabs = KILO_TAB_STOP - (sb_get_size(sb) % KILO_TAB_STOP);
-                while (tabs--) sb_append(sb, " ", 1);
+                int tabs = KILO_TAB_STOP - (sb->n_chars % KILO_TAB_STOP);
+                while (tabs--) ab_append(sb, " ", 1);
                 break;
             }
             default:
-                sb_append(sb, s+i, 1);
+                ab_append(sb, s+i, 1);
         }
     }
 
-    new_row->rchars = malloc(sb_get_size(sb));
-    new_row->n_rchars = sb_get_size(sb);
-    memcpy(new_row->rchars, sb_get_string(sb), sb_get_size(sb));
+    new_row->rchars = malloc(sb->n_chars);
+    new_row->n_rchars = sb->n_chars;
+    memcpy(new_row->rchars, sb->chars, sb->n_chars);
 
-    sb_free(sb);
+    ab_free(sb);
 
     E.n_rows++;
 }
@@ -161,30 +154,30 @@ void editor_set_message(const char *fmt, ...) {
 
 
 void editor_redraw_screen(void) {
-    if (term_cursor_hidden(true) == -1)
+    if (terminal_cursor_visibility(true) == -1)
         die("term_cursor_hidden");
 
 
-    struct string_buf *draw_buf = sb_init();
+    struct append_buf *draw_buf = ab_init();
 
     editor_draw_rows(draw_buf);
     editor_draw_statusbar(draw_buf);
     editor_draw_messagebar(draw_buf);
 
-    write(STDIN_FILENO, sb_get_string(draw_buf), sb_get_size(draw_buf));
-    sb_free(draw_buf);
+    write(STDIN_FILENO, draw_buf->chars, draw_buf->n_chars);
+    ab_free(draw_buf);
 
     int row_pos = E.cy - E.row_off + 1;
     int col_pos = E.rx - E.col_off + 1;
-    if (term_set_cursor_pos(row_pos, col_pos) == -1)
+    if (terminal_set_cursor_pos(row_pos, col_pos) == -1)
         die("term_set_cursor_pos");
 
-    if (term_cursor_hidden(false) == -1)
+    if (terminal_cursor_visibility(false) == -1)
         die("term_cursor_hidden");
 }
 
-void editor_draw_rows(struct string_buf *draw_buf) {
-    term_set_cursor_pos(1, 1);
+void editor_draw_rows(struct append_buf *draw_buf) {
+    terminal_set_cursor_pos(1, 1);
     for (int y = 0; y < E.screenrows; y++) {
         bool in_file = y < E.n_rows - E.row_off;
         bool no_file = E.n_rows == 0;
@@ -193,7 +186,7 @@ void editor_draw_rows(struct string_buf *draw_buf) {
             struct EROW curr_row = E.rows[y + E.row_off];
             int max_len = MIN(curr_row.n_rchars - E.col_off, E.screencols);
 
-            sb_append(draw_buf, curr_row.rchars + E.col_off, MAX(max_len, 0));
+            ab_append(draw_buf, curr_row.rchars + E.col_off, MAX(max_len, 0));
         } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
             int len = snprintf(welcome, sizeof(welcome),
@@ -201,22 +194,22 @@ void editor_draw_rows(struct string_buf *draw_buf) {
 
             int padding = (E.screencols - len) / 2;
             for (int i = 0; i < padding; i++)
-                sb_append(draw_buf, (i == 0 ? "~" : " "), 1);
+                ab_append(draw_buf, (i == 0 ? "~" : " "), 1);
 
-            sb_append(draw_buf, welcome, len);
-        } else sb_append(draw_buf, "~", 1);
+            ab_append(draw_buf, welcome, len);
+        } else ab_append(draw_buf, "~", 1);
 
-        sb_append(draw_buf, "\x1b[K\r\n", 5);
+        ab_append(draw_buf, "\x1b[K\r\n", 5);
     }
 }
 
-void editor_draw_statusbar(struct string_buf *draw_buf) {
+void editor_draw_statusbar(struct append_buf *draw_buf) {
     char *status_buf = malloc(E.screencols), buf[256];
     int len;
 
     memset(status_buf, ' ', E.screencols);
 
-    sb_append(draw_buf, "\x1b[7m", 4);
+    ab_append(draw_buf, "\x1b[7m", 4);
 
     len = sprintf(buf, "%s -- %d lines",
                   (E.filename ? E.filename : "[NO NAME]"), E.n_rows);
@@ -225,24 +218,24 @@ void editor_draw_statusbar(struct string_buf *draw_buf) {
     len = sprintf(buf, "%d:%d", E.cy + 1, E.rx + 1);
     memcpy(status_buf + E.screencols - len, buf, len);
 
-    sb_append(draw_buf, status_buf, E.screencols);
-    sb_append(draw_buf, "\x1b[m\r\n", 5);
+    ab_append(draw_buf, status_buf, E.screencols);
+    ab_append(draw_buf, "\x1b[m\r\n", 5);
 
     free(status_buf);
 }
-void editor_draw_messagebar(struct string_buf *draw_buf) {
-    sb_append(draw_buf, "\x1b[K", 3);
+void editor_draw_messagebar(struct append_buf *draw_buf) {
+    ab_append(draw_buf, "\x1b[K", 3);
 
     int len = strlen(E.message);
     if (len > E.screencols) len = E.screencols;
 
     if (len && time(NULL) - E.message_time < 5)
-        sb_append(draw_buf, E.message, len);
+        ab_append(draw_buf, E.message, len);
 }
 
 
 void editor_process_key(void) {
-    KEY c = term_read_key();
+    KEY c = terminal_read_key();
 
     switch (c) {
         case ARROW_LEFT:
@@ -365,45 +358,8 @@ int editor_get_cx(int rx_target) {
 
 /*****************************************************************************/
 
-struct string_buf {
-    char *chars;
-    int n_chars;
-};
-
-struct string_buf *sb_init(void) {
-    size_t buf_size = sizeof(struct string_buf);
-    struct string_buf *sb = (struct string_buf *) malloc(buf_size);
-
-    sb->chars = NULL;
-    sb->n_chars = 0;
-
-    return sb;
-}
-
-char *sb_get_string(struct string_buf *sb) {
-    return sb->chars;
-}
-
-int sb_get_size(struct string_buf *sb) {
-    return sb->n_chars;
-}
-
-void sb_append(struct string_buf *sb, const char *chars, int n_chars) {
-    sb->chars = realloc(sb->chars, sb->n_chars + n_chars);
-
-    memcpy(sb->chars + sb->n_chars, chars, n_chars);
-    sb->n_chars += n_chars;
-}
-
-void sb_free(struct string_buf *sb) {
-    free(sb->chars);
-    free(sb);
-}
-
-/*****************************************************************************/
-
 void die(const char *s) {
-    term_clear();
+    terminal_clear();
 
     perror(s);
     exit(1);

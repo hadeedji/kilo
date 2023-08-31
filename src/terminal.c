@@ -7,7 +7,7 @@
 #include "kilo.h"
 #include "terminal.h"
 
-int term_enable_raw(void) {
+ERRCODE terminal_enable_raw(void) {
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
         return -1;
 
@@ -19,30 +19,30 @@ int term_enable_raw(void) {
     raw.c_cc[VMIN]  = 0;
     raw.c_cc[VTIME] = 1;
 
-    atexit(term_disable_raw);
+    atexit(terminal_disable_raw);
     return tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-void term_disable_raw(void) {
+void terminal_disable_raw(void) {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
         die ("term_disable_raw");
 }
 
-int term_clear(void) {
+ERRCODE terminal_clear(void) {
     if (write(STDOUT_FILENO, "\x1b[2J", 4) != 4) return -1;
     if (write(STDOUT_FILENO, "\x1b[H", 3) != 3) return -1;
     return 0;
 
 }
 
-int term_cursor_hidden(bool hidden) {
-    if (write(STDOUT_FILENO, (hidden ? "\x1b[?25l" : "\x1b[?25h"), 6) != 6)
+ERRCODE terminal_cursor_visibility(enum cursor_visibility visibility) {
+    if (write(STDOUT_FILENO, (visibility ? "\x1b[?25l" : "\x1b[?25h"), 6) != 6)
         return -1;
 
     return 0;
 }
 
-int term_get_win_size(int *row, int *col) {
+ERRCODE terminal_get_win_size(int *row, int *col) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col != 0) {
@@ -51,13 +51,14 @@ int term_get_win_size(int *row, int *col) {
 
         return 0;
     } else {
+        // Fallback implementation
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
 
-        return term_get_cursor_pos(row, col);
+        return terminal_get_cursor_pos(row, col);
     }
 }
 
-int term_get_cursor_pos(int *row, int *col) {
+ERRCODE terminal_get_cursor_pos(int *row, int *col) {
     char buf[16];
 
     if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) return -1;
@@ -75,7 +76,7 @@ int term_get_cursor_pos(int *row, int *col) {
     return 0;
 }
 
-int term_set_cursor_pos(int row, int col) {
+ERRCODE terminal_set_cursor_pos(int row, int col) {
     char buf[16];
 
     int len = snprintf(buf, sizeof(buf), "\x1b[%d;%dH", row, col);
@@ -85,7 +86,7 @@ int term_set_cursor_pos(int row, int col) {
     return 0;
 }
 
-KEY term_read_key(void) {
+KEY terminal_read_key(void) {
     char c;
     while (read(STDIN_FILENO, &c, 1) == 0);
 
@@ -102,6 +103,13 @@ KEY term_read_key(void) {
                     case 'B': return ARROW_DOWN;
                     case 'C': return ARROW_RIGHT;
                     case 'D': return ARROW_LEFT;
+                    case 'H': return HOME;
+                    case 'F': return END;
+                }
+            }
+
+            if (sscanf(buf, "O%c", &escape_char) != EOF) {
+                switch (escape_char) {
                     case 'H': return HOME;
                     case 'F': return END;
                 }

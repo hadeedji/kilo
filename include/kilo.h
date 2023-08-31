@@ -6,6 +6,10 @@
 #include <termios.h>
 #include <time.h>
 
+// Stuff I couldn' figure out where else to put
+
+typedef int ERRCODE;
+
 struct editor_state {
     char *filename;
     int cx, cy;
@@ -24,10 +28,6 @@ struct editor_state {
 };
 extern struct editor_state E;
 
-typedef uint16_t KEY;
-
-void die(const char *);
-
 enum KEYS {
     TAB = 9,
     HOME = 0x100,
@@ -41,6 +41,8 @@ enum KEYS {
     ARROW_RIGHT,
     NOP
 };
+typedef uint16_t KEY;
 
+void die(const char *context);
 
 #endif // KILO_H
