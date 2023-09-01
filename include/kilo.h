@@ -16,7 +16,6 @@ struct editor_state {
     int rx;
     int screenrows, screencols;
     int row_off, col_off;
-    bool running;
 
     struct EROW *rows;
     int n_rows;

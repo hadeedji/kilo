@@ -56,12 +56,11 @@ int main(int argc, char **argv) {
     if (argc >= 2)
         editor_open(argv[1]);
 
-    while (E.running) {
+    while (true) {
         editor_redraw_screen();
         editor_process_key();
     }
 
-    terminal_clear();
     return 0;
 }
 
@@ -82,7 +81,6 @@ void editor_init(void) {
     E.rx = 0;
     E.screenrows -= 2;
     E.row_off = E.col_off = 0;
-    E.running = true;
 
     E.rows = NULL;
     E.n_rows = 0;
@@ -250,7 +248,8 @@ void editor_process_key(void) {
             break;
 
         case CTRL_KEY('Q'):
-            E.running = false;
+            terminal_clear();
+            exit(0);
             break;
     }
 }
