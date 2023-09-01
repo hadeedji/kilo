@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "kilo.h"
+#include "utils.h"
 #include "terminal.h"
 
 ERRCODE terminal_enable_raw(void) {

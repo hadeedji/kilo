@@ -1,9 +1,20 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "append_buf.h"
+#include "utils.h"
+#include "terminal.h"
 
-struct append_buf *ab_init(void) {
+void die(const char *context) {
+    terminal_clear();
+
+    perror(context);
+    exit(1);
+}
+
+/*****************************************************************************/
+
+struct append_buf *ab_create(void) {
     size_t buf_size = sizeof(struct append_buf);
     struct append_buf *sb = (struct append_buf *) malloc(buf_size);
 

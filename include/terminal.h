@@ -1,9 +1,8 @@
 #ifndef TERMINAL_H
 #define TERMINAL_H
 
-#include <stdbool.h>
-
-#include "kilo.h"
+#include "input.h"
+#include "utils.h"
 
 // Functions to perform low level terminal operations, using escape codes
 

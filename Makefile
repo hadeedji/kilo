@@ -6,7 +6,7 @@ WARNING_FLAGS := -Wall -Wextra
 INCLUDE_FLAGS := -I include
 
 CC := clang
-CFLAGS := $(WARNING_FLAGS) $(INCLUDE_FLAGS) -MMD -MP -std=c99
+CFLAGS := $(WARNING_FLAGS) $(INCLUDE_FLAGS) -MMD -MP -std=c99 -ggdb
 
 kilo: $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
