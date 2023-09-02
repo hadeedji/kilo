@@ -3,6 +3,7 @@
 #include "input.h"
 #include "terminal.h"
 #include "commands.h"
+#include "utils.h"
 
 void input_process_key(void) {
     KEY c = terminal_read_key();
@@ -16,12 +17,23 @@ void input_process_key(void) {
         case END:
         case PG_UP:
         case PG_DOWN:
-            editor_move_cursor(c);
+            command_move_cursor(c);
             break;
 
         case CTRL_KEY('Q'):
             terminal_clear();
             exit(0);
             break;
+
+        case '\r':
+            break;
+
+        case 127:
+        case DEL:
+        case CTRL_KEY('H'):
+            break;
+
+        default:
+            command_insert_char(c);
     }
 }

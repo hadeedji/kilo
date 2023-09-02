@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -11,7 +12,6 @@
 #include "terminal.h"
 
 void editor_init(char *filename);
-void editor_set_message(const char *, ...);
 
 struct editor_state E;
 
@@ -46,6 +46,7 @@ void editor_init(char *filename) {
         buffer_read_file(E.current_buf, filename);
 
     editor_set_message("Welcome to kilo. Press CTRL-Q to quit.");
+    terminal_clear();
 }
 
 void editor_set_message(const char *fmt, ...) {

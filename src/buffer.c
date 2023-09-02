@@ -64,6 +64,9 @@ void buffer_append_row(struct buffer *buffer, const char *chars, int n_chars) {
     memcpy(new_row->chars, chars, n_chars);
     new_row->n_chars = n_chars;
 
+    new_row->rchars = NULL;
+    new_row->n_rchars = 0;
+
     erow_update_rendering(new_row);
 }
 
@@ -114,6 +117,19 @@ void erow_update_rendering(struct erow *erow) {
     memcpy(erow->rchars, line_buffer, n_rchars);
 
     free(line_buffer);
+}
+
+void erow_insert_char(struct erow *erow, int at, char c) {
+    if (at < 0) at = 0;
+    if (at > erow->n_chars) at = erow->n_chars;
+
+    erow->chars = realloc(erow->chars, erow->n_chars + 1);
+    memmove(erow->chars + at + 1, erow->chars + at, erow->n_chars - at);
+
+    erow->chars[at] = c;
+    erow->n_chars++;
+
+    erow_update_rendering(erow);
 }
 
 int erow_cx_to_rx(struct erow *erow, int cx) {

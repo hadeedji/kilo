@@ -89,6 +89,7 @@ ERRCODE terminal_set_cursor_pos(int row, int col) {
 
 KEY terminal_read_key(void) {
     char c;
+    int n;
     while (read(STDIN_FILENO, &c, 1) == 0);
 
     if (c == '\x1b') {
@@ -98,7 +99,11 @@ KEY terminal_read_key(void) {
             if (read(STDIN_FILENO, buf+i, 1) == 0) break;
 
             char escape_char;
-            if (sscanf(buf, "[%c~", &escape_char) != EOF) {
+            int escape_int;
+
+            n = 0;
+            sscanf(buf, "[%c%n", &escape_char, &n);
+            if (n > 0) {
                 switch (escape_char) {
                     case 'A': return ARROW_UP;
                     case 'B': return ARROW_DOWN;
@@ -109,15 +114,18 @@ KEY terminal_read_key(void) {
                 }
             }
 
-            if (sscanf(buf, "O%c", &escape_char) != EOF) {
+            n = 0;
+            sscanf(buf, "O%c%n", &escape_char, &n);
+            if (n > 0) {
                 switch (escape_char) {
                     case 'H': return HOME;
                     case 'F': return END;
                 }
             }
 
-            int escape_int;
-            if (sscanf(buf, "[%d~", &escape_int) != EOF) {
+            n = 0;
+            sscanf(buf, "[%d~%n", &escape_int, &n);
+            if (n > 0) {
                 switch (escape_int) {
                     case 1:
                     case 7:

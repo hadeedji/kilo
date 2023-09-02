@@ -3,6 +3,7 @@
 
 #include "input.h"
 
-void editor_move_cursor(KEY key);
+void command_move_cursor(KEY key);
+void command_insert_char(char c);
 
 #endif // COMMANDS_H
