@@ -4,6 +4,7 @@
 #include "input.h"
 #include "kilo.h"
 #include "buffer.h"
+#include "utils.h"
 
 static void cursor_adjust_viewport(void);
 static void cursor_check_file_bounds(bool horizontal);
@@ -61,6 +62,15 @@ void command_insert_char(char c) {
 
     erow_insert_char(E.current_buf->rows+E.cy, E.cx++, c);
     E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
+}
+
+void command_save_buffer(void) {
+    ERRCODE errcode = buffer_write_file(E.current_buf);
+
+    if (errcode == 0)
+        editor_set_message("Saved file %s", E.current_buf->filename);
+    else if (errcode == -1)
+        editor_set_message("Save failed, no filename");
 }
 
 static void cursor_check_file_bounds(bool horizontal) {

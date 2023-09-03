@@ -1,6 +1,8 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
+#include "utils.h"
+
 struct erow {
     char *chars;
     int n_chars;
@@ -18,6 +20,7 @@ struct buffer {
 struct buffer *buffer_create(void);
 void buffer_read_file(struct buffer *buffer, const char *filename);
 void buffer_append_row(struct buffer *buffer, const char *chars, int n_chars);
+ERRCODE buffer_write_file(struct buffer *buffer);
 
 void erow_update_rendering(struct erow *erow);
 void erow_insert_char(struct erow *erow, int at, char c);

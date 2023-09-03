@@ -1,7 +1,9 @@
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "buffer.h"
 #include "kilo.h"
@@ -19,6 +21,7 @@ struct buffer *buffer_create(void) {
     return buf;
 }
 
+// TODO: Handle file not existing
 void buffer_read_file(struct buffer *buffer, const char *filename) {
     if (buffer->filename)
         free(buffer->filename);
@@ -54,6 +57,33 @@ void buffer_read_file(struct buffer *buffer, const char *filename) {
 
     free(line_buffer);
     fclose(file);
+}
+
+ERRCODE buffer_write_file(struct buffer *buffer) {
+    if (buffer->filename == NULL)
+        return -1;
+
+    size_t len = 0;
+
+    for (int i = 0; i < buffer->n_rows; i++)
+        len += buffer->rows[i].n_chars + 1;
+
+    char *write_buffer = malloc(len);
+    char *p = write_buffer;
+    for (int i = 0; i < buffer->n_rows; i++) {
+        struct erow *row = buffer->rows+i;
+        memcpy(p, row->chars, row->n_chars);
+        p += row->n_chars;
+        *p = '\n';
+        p++;
+    }
+
+    int fd = open(buffer->filename, O_RDWR | O_TRUNC | O_CREAT, 0644);
+    write(fd, write_buffer, len);
+    close(fd);
+    free(write_buffer);
+
+    return 0;
 }
 
 void buffer_append_row(struct buffer *buffer, const char *chars, int n_chars) {

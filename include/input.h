@@ -5,6 +5,7 @@
 
 enum KEYS {
     TAB = 9,
+    BACKSPACE = 127,
     HOME = 0x100,
     DEL,
     PG_UP,

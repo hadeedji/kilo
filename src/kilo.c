@@ -45,7 +45,7 @@ void editor_init(char *filename) {
     if (filename)
         buffer_read_file(E.current_buf, filename);
 
-    editor_set_message("Welcome to kilo. Press CTRL-Q to quit.");
+    editor_set_message("Welcome to kilo! | CTRL-Q: Quit | CTRL-S: SAVE");
     terminal_clear();
 }
 

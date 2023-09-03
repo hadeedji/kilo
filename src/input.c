@@ -20,6 +20,10 @@ void input_process_key(void) {
             command_move_cursor(c);
             break;
 
+        case CTRL_KEY('S'):
+            command_save_buffer();
+            break;
+
         case CTRL_KEY('Q'):
             terminal_clear();
             exit(0);
@@ -28,9 +32,13 @@ void input_process_key(void) {
         case '\r':
             break;
 
-        case 127:
-        case DEL:
+        case BACKSPACE:
         case CTRL_KEY('H'):
+        case DEL:
+            break;
+
+        case CTRL_KEY('L'):
+        // case NOP:
             break;
 
         default:
