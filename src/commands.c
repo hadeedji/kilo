@@ -1,14 +1,28 @@
+#include <errno.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
+#include "buffer.h"
 #include "commands.h"
 #include "input.h"
 #include "kilo.h"
-#include "buffer.h"
+#include "terminal.h"
 #include "utils.h"
 
 static void cursor_adjust_viewport(void);
 static void cursor_check_file_bounds(bool horizontal);
 static void cursor_update_rx(bool horizontal);
+
+void command_quit(void) {
+    if (E.current_buf->modified && E.quit_times) {
+        editor_set_message("Unsaved changed! Press quit %d more time(s)", E.quit_times);
+        E.quit_times--;
+    } else {
+        terminal_clear();
+        exit(0);
+    }
+}
 
 void command_move_cursor(KEY key) {
     struct erow *rows = E.current_buf->rows;
@@ -47,9 +61,9 @@ void command_move_cursor(KEY key) {
     }
 
     bool horizontal = (key == ARROW_LEFT  || 
-                       key == ARROW_RIGHT ||
-                       key == HOME        ||
-                       key == END);
+        key == ARROW_RIGHT ||
+        key == HOME        ||
+        key == END);
 
     cursor_check_file_bounds(horizontal);
     cursor_update_rx(horizontal);
@@ -64,13 +78,24 @@ void command_insert_char(char c) {
     E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
 }
 
+void command_delete_char(void) {
+    struct erow *row = E.current_buf->rows + E.cy;
+
+    if (E.cx == 0) {
+        // TODO
+    } else
+        erow_delete_char(row, E.cx);
+
+    E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
+}
+
 void command_save_buffer(void) {
     ERRCODE errcode = buffer_write_file(E.current_buf);
 
     if (errcode == 0)
         editor_set_message("Saved file %s", E.current_buf->filename);
-    else if (errcode == -1)
-        editor_set_message("Save failed, no filename");
+    else
+        editor_set_message("Save failed: ERRCODE %d: %s", errcode, strerror(errno));
 }
 
 static void cursor_check_file_bounds(bool horizontal) {
@@ -87,7 +112,13 @@ static void cursor_check_file_bounds(bool horizontal) {
         E.cy = n_rows;
 
     if (E.cx < 0) {
-        if (E.cy > 0 && horizontal) E.cx = rows[--E.cy].n_chars;
+        if (E.cy > 0 && horizontal)
+        {
+            current_row = &rows[--E.cy];
+            max_x = current_row->n_chars;
+
+            E.cx = max_x;
+        }
         else E.cx = 0;
     }
 

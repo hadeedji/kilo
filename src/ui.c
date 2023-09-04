@@ -72,7 +72,9 @@ static void ui_draw_statusbar(struct append_buf *draw_buf) {
     ab_append(draw_buf, "\x1b[7m", 4);
 
     char *display = E.current_buf->filename ? E.current_buf->filename : "[NO NAME]";
-    len = sprintf(buf, "%s -- %d lines", display, E.current_buf->n_rows);
+    char *modified = E.current_buf->modified ? "(modified) " : "";
+    int n_rows = E.current_buf->n_rows;
+    len = sprintf(buf, "%s %s-- %d lines", display, modified, n_rows);
     memcpy(status_buf, buf, len);
 
     len = sprintf(buf, "%d:%d", E.cy + 1, E.rx + 1);

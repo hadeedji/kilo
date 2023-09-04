@@ -1,8 +1,9 @@
 #include <stdlib.h>
 
-#include "input.h"
-#include "terminal.h"
 #include "commands.h"
+#include "input.h"
+#include "kilo.h"
+#include "terminal.h"
 #include "utils.h"
 
 void input_process_key(void) {
@@ -20,28 +21,31 @@ void input_process_key(void) {
             command_move_cursor(c);
             break;
 
+        case CTRL_KEY('Q'):
+            command_quit();
+            return;
+
         case CTRL_KEY('S'):
             command_save_buffer();
             break;
 
-        case CTRL_KEY('Q'):
-            terminal_clear();
-            exit(0);
-            break;
-
         case '\r':
+            // TODO
             break;
 
         case BACKSPACE:
         case CTRL_KEY('H'):
         case DEL:
+            command_delete_char();
             break;
 
         case CTRL_KEY('L'):
-        // case NOP:
+        case NOP:
             break;
 
         default:
             command_insert_char(c);
     }
+
+    E.quit_times = 3;
 }

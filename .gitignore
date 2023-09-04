@@ -4,3 +4,4 @@ kilo
 .cache
 .clangd
 compile_commands.json
+test_file

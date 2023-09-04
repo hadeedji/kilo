@@ -7,6 +7,7 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 typedef int ERRCODE;
+#define RETURN(code) do {errcode = code; goto END;} while(0)
 
 void die(const char *context);
 

@@ -1,6 +1,8 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
+#include <stdbool.h>
+
 #include "utils.h"
 
 struct erow {
@@ -15,6 +17,7 @@ struct buffer {
     char *filename;
     struct erow *rows;
     int n_rows;
+    bool modified;
 };
 
 struct buffer *buffer_create(void);
@@ -24,6 +27,7 @@ ERRCODE buffer_write_file(struct buffer *buffer);
 
 void erow_update_rendering(struct erow *erow);
 void erow_insert_char(struct erow *erow, int at, char c);
+void erow_delete_char(struct erow *erow, int at);
 int erow_cx_to_rx(struct erow *erow, int cx);
 int erow_rx_to_cx(struct erow *erow, int rx);
 

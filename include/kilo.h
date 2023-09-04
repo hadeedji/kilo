@@ -11,6 +11,7 @@ struct editor_state {
     int cx, cy, rx;
     int row_off, col_off;
     int screenrows, screencols;
+    int quit_times;
 
     struct buffer *current_buf;
     struct termios orig_termios;

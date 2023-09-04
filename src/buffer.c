@@ -10,15 +10,17 @@
 #include "utils.h"
 
 static void buffer_free_rows(struct buffer *buffer);
+static char *buffer_get_string(struct buffer *buffer, size_t *len_p);
 
 struct buffer *buffer_create(void) {
-    struct buffer *buf = malloc(sizeof(struct buffer));
+    struct buffer *buffer = malloc(sizeof(struct buffer));
 
-    buf->filename = NULL;
-    buf->rows = NULL;
-    buf->n_rows = 0;
+    buffer->filename = NULL;
+    buffer->rows = NULL;
+    buffer->n_rows = 0;
+    buffer->modified = false;
 
-    return buf;
+    return buffer;
 }
 
 // TODO: Handle file not existing
@@ -57,33 +59,40 @@ void buffer_read_file(struct buffer *buffer, const char *filename) {
 
     free(line_buffer);
     fclose(file);
+
+    buffer->modified = false;
 }
 
 ERRCODE buffer_write_file(struct buffer *buffer) {
+    ERRCODE errcode = 0;
+
+    int fd = -1;
+    char *write_buffer = NULL;
+
     if (buffer->filename == NULL)
-        return -1;
+        RETURN(-1);
 
-    size_t len = 0;
+    size_t len;
+    write_buffer = buffer_get_string(buffer, &len);
 
-    for (int i = 0; i < buffer->n_rows; i++)
-        len += buffer->rows[i].n_chars + 1;
+    fd = open(buffer->filename, O_RDWR | O_TRUNC | O_CREAT, 0644);
+    if (fd == -1)
+        RETURN(-2);
 
-    char *write_buffer = malloc(len);
-    char *p = write_buffer;
-    for (int i = 0; i < buffer->n_rows; i++) {
-        struct erow *row = buffer->rows+i;
-        memcpy(p, row->chars, row->n_chars);
-        p += row->n_chars;
-        *p = '\n';
-        p++;
-    }
+    if (write(fd, write_buffer, len) != (ssize_t) len)
+        RETURN(-3);
 
-    int fd = open(buffer->filename, O_RDWR | O_TRUNC | O_CREAT, 0644);
-    write(fd, write_buffer, len);
-    close(fd);
-    free(write_buffer);
+END:
+    if (fd != -1)
+        close(fd);
 
-    return 0;
+    if (write_buffer)
+        free(write_buffer);
+
+    if (errcode == 0)
+        buffer->modified = false;
+
+    return errcode;
 }
 
 void buffer_append_row(struct buffer *buffer, const char *chars, int n_chars) {
@@ -98,6 +107,8 @@ void buffer_append_row(struct buffer *buffer, const char *chars, int n_chars) {
     new_row->n_rchars = 0;
 
     erow_update_rendering(new_row);
+
+    buffer->modified = true;
 }
 
 void buffer_free(struct buffer *buffer) {
@@ -110,6 +121,25 @@ static void buffer_free_rows(struct buffer *buffer) {
         if (buffer->rows->chars) free(buffer->rows->chars);
         if (buffer->rows->rchars) free(buffer->rows->rchars);
     }
+}
+
+static char *buffer_get_string(struct buffer *buffer, size_t *len_p) {
+    *len_p = 0;
+
+    for (int i = 0; i < buffer->n_rows; i++)
+        *len_p += buffer->rows[i].n_chars + 1;
+
+    char *write_buffer = malloc(*len_p);
+    char *p = write_buffer;
+    for (int i = 0; i < buffer->n_rows; i++) {
+        struct erow *row = buffer->rows+i;
+        memcpy(p, row->chars, row->n_chars);
+        p += row->n_chars;
+        *p = '\n';
+        p++;
+    }
+
+    return write_buffer;
 }
 
 /*****************************************************************************/
@@ -160,6 +190,25 @@ void erow_insert_char(struct erow *erow, int at, char c) {
     erow->n_chars++;
 
     erow_update_rendering(erow);
+
+    // TODO: Seems like a bad idea
+    E.current_buf->modified = true;
+}
+
+void erow_delete_char(struct erow *erow, int at) {
+    if (at < 0) at = 0;
+    if (at > erow->n_chars) at = erow->n_chars;
+
+    if (at != 0) {
+        memmove(erow->chars + at, erow->chars + at + 1, erow->n_chars - at);
+        erow->n_chars--;
+        erow->chars = realloc(erow->chars, erow->n_chars);
+        E.cx--;
+        erow_update_rendering(erow);
+    }
+
+    // TODO
+    E.current_buf->modified = true;
 }
 
 int erow_cx_to_rx(struct erow *erow, int cx) {

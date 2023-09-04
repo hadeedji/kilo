@@ -40,6 +40,7 @@ void editor_init(char *filename) {
     if (terminal_get_win_size(&E.screenrows, &E.screencols) == -1)
         die("term_get_win_size");
     E.screenrows -= 2;
+    E.quit_times = 3;
 
     E.current_buf = buffer_create();
     if (filename)
