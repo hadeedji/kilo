@@ -70,11 +70,27 @@ void command_move_cursor(KEY key) {
     cursor_adjust_viewport();
 }
 
+// TODO: Improve this
 void command_insert_line(void) {
-    buffer_insert_row(E.current_buf, NULL, 0, ++E.cy);
+    if (E.cy == E.current_buf->n_rows) {
+        buffer_insert_row(E.current_buf, NULL, 0, E.cy);
+        E.cy++;
+    } else {
+        buffer_insert_row(E.current_buf, NULL, 0, E.cy + 1);
 
-    E.cx = 0;
-    E.rx = 0;
+        struct erow *c_row = E.current_buf->rows + E.cy;
+        struct erow *n_row = E.current_buf->rows + E.cy + 1;
+
+        erow_append_string(n_row, c_row->chars + E.cx, c_row->n_chars - E.cx);
+
+        c_row->chars = realloc(c_row->chars, E.cx);
+        c_row->n_chars = E.cx;
+        erow_update_rendering(c_row);
+
+        E.cx = 0;
+        E.rx = 0;
+        E.cy++;
+    }
 }
 
 void command_insert_char(char c) {

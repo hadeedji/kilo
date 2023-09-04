@@ -96,7 +96,7 @@ END:
 
 void buffer_insert_row(struct buffer *buffer, const char *chars, int n_chars, int at) { // TODO: Make this take an erow
     buffer->rows = realloc(buffer->rows, sizeof(struct erow) * (buffer->n_rows + 1));
-    memmove(buffer->rows + at, buffer->rows + at + 1, sizeof(struct erow) * (buffer->n_rows - at));
+    memmove(buffer->rows + at + 1, buffer->rows + at, sizeof(struct erow) * (buffer->n_rows - at));
     struct erow *erow = buffer->rows + at;
 
     erow->chars = malloc(n_chars);
