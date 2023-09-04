@@ -28,8 +28,8 @@ void command_move_cursor(KEY key) {
     struct erow *rows = E.current_buf->rows;
     int n_rows = E.current_buf->n_rows;
 
-    struct erow *current_row = (rows && E.cy < n_rows ? rows + E.cy : NULL);
-    int max_x = (current_row ? current_row->n_chars : 0);
+    struct erow *erow = (rows && E.cy < n_rows ? rows + E.cy : NULL);
+    int max_x = (erow ? erow->n_chars : 0);
 
     switch (key) {
         case ARROW_LEFT:
@@ -70,21 +70,43 @@ void command_move_cursor(KEY key) {
     cursor_adjust_viewport();
 }
 
+void command_insert_line(void) {
+    buffer_insert_row(E.current_buf, NULL, 0, ++E.cy);
+
+    E.cx = 0;
+    E.rx = 0;
+}
+
 void command_insert_char(char c) {
     if (E.cy == E.current_buf->n_rows)
-        buffer_append_row(E.current_buf, NULL, 0);
+        buffer_insert_row(E.current_buf, NULL, 0, E.current_buf->n_rows);
 
     erow_insert_char(E.current_buf->rows+E.cy, E.cx++, c);
     E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
 }
 
-void command_delete_char(void) {
-    struct erow *row = E.current_buf->rows + E.cy;
+void command_delete_char(void) { // TODO
+    if (E.cx == 0 && E.cy == 0) return;
+    if (E.cy == E.current_buf->n_rows) {
+        E.cx = E.current_buf->rows[--E.cy].n_chars;
+        E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
+        return;
+    }
 
-    if (E.cx == 0) {
-        // TODO
-    } else
-        erow_delete_char(row, E.cx);
+    if (E.cx > 0) {
+        erow_delete_char(E.current_buf->rows+E.cy, E.cx - 1);
+    }
+    else {
+        struct erow *c_row = E.current_buf->rows + E.cy;
+        struct erow *p_row = E.current_buf->rows + E.cy - 1;
+
+        E.cx = p_row->n_chars;
+
+        erow_append_string(p_row, c_row->chars, c_row->n_chars);
+        buffer_delete_row(E.current_buf, E.cy);
+
+        E.cy--;
+    }
 
     E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
 }
@@ -102,8 +124,8 @@ static void cursor_check_file_bounds(bool horizontal) {
     struct erow *rows = E.current_buf->rows;
     int n_rows = E.current_buf->n_rows;
 
-    struct erow *current_row = (rows && E.cy < n_rows ? rows + E.cy : NULL);
-    int max_x = (current_row ? current_row->n_chars : 0);
+    struct erow *erow = (rows && E.cy < n_rows ? rows + E.cy : NULL);
+    int max_x = (erow ? erow->n_chars : 0);
 
     if (E.cy < 0)
         E.cy = 0;
@@ -114,8 +136,8 @@ static void cursor_check_file_bounds(bool horizontal) {
     if (E.cx < 0) {
         if (E.cy > 0 && horizontal)
         {
-            current_row = &rows[--E.cy];
-            max_x = current_row->n_chars;
+            erow = &rows[--E.cy];
+            max_x = erow->n_chars;
 
             E.cx = max_x;
         }
@@ -134,13 +156,13 @@ static void cursor_update_rx(bool horizontal) {
     struct erow *rows = E.current_buf->rows;
     int n_rows = E.current_buf->n_rows;
 
-    struct erow *current_row = (rows && E.cy < n_rows ? rows + E.cy : NULL);
-    int max_x = (current_row ? current_row->n_chars : 0);
+    struct erow *erow = (rows && E.cy < n_rows ? rows + E.cy : NULL);
+    int max_x = (erow ? erow->n_chars : 0);
 
     static int saved_rx = 0;
-    if (horizontal) saved_rx = erow_cx_to_rx(current_row, E.cx);
+    if (horizontal) saved_rx = erow_cx_to_rx(erow, E.cx);
     else {
-        E.cx = erow_rx_to_cx(current_row, saved_rx);
+        E.cx = erow_rx_to_cx(erow, saved_rx);
         if (E.cx > max_x)
             E.cx = max_x;
     }

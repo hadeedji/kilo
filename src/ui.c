@@ -43,10 +43,10 @@ static void ui_draw_rows(struct append_buf *draw_buf) {
         bool no_file = (E.current_buf->n_rows == 0);
 
         if (in_file) {
-            struct erow curr_row = E.current_buf->rows[y + E.row_off];
-            int max_len = MIN(curr_row.n_rchars - E.col_off, E.screencols);
+            struct erow erow = E.current_buf->rows[y + E.row_off];
+            int max_len = MIN(erow.n_rchars - E.col_off, E.screencols);
 
-            ab_append(draw_buf, curr_row.rchars + E.col_off, MAX(max_len, 0));
+            ab_append(draw_buf, erow.rchars + E.col_off, MAX(max_len, 0));
         } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
             int len = snprintf(welcome, sizeof(welcome),

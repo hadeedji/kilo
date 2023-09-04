@@ -30,12 +30,13 @@ void input_process_key(void) {
             break;
 
         case '\r':
-            // TODO
+            command_insert_line();
             break;
 
+        case DEL:
+            command_move_cursor(ARROW_RIGHT);
         case BACKSPACE:
         case CTRL_KEY('H'):
-        case DEL:
             command_delete_char();
             break;
 
