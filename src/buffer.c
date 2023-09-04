@@ -62,7 +62,7 @@ void buffer_read_file(struct buffer *buffer, const char *filename) { // TODO: Ad
     buffer->modified = false;
 }
 
-ERRCODE buffer_write_file(struct buffer *buffer) {
+ERRCODE buffer_write_file(struct buffer *buffer, int *bytes_written) {
     ERRCODE errcode = 0;
 
     int fd = -1;
@@ -78,7 +78,8 @@ ERRCODE buffer_write_file(struct buffer *buffer) {
     if (fd == -1)
         RETURN(-2);
 
-    if (write(fd, write_buffer, len) != (ssize_t) len)
+    *bytes_written = write(fd, write_buffer, len);
+    if (*bytes_written != (ssize_t) len)
         RETURN(-3);
 
 END:

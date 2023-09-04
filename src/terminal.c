@@ -96,7 +96,10 @@ KEY terminal_read_key(void) {
         char buf[8] = { '\0' };
 
         for (int i = 0; i < (int) sizeof(buf); i++) {
-            if (read(STDIN_FILENO, buf+i, 1) == 0) break;
+            if (read(STDIN_FILENO, buf+i, 1) == 0) {
+                if (i == 0) return ESCAPE;
+                else break;
+            }
 
             char escape_char;
             int escape_int;

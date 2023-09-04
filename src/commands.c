@@ -74,7 +74,6 @@ void command_move_cursor(KEY key) {
 void command_insert_line(void) {
     if (E.cy == E.current_buf->n_rows) {
         buffer_insert_row(E.current_buf, NULL, 0, E.cy);
-        E.cy++;
     } else {
         buffer_insert_row(E.current_buf, NULL, 0, E.cy + 1);
 
@@ -86,11 +85,12 @@ void command_insert_line(void) {
         c_row->chars = realloc(c_row->chars, E.cx);
         c_row->n_chars = E.cx;
         erow_update_rendering(c_row);
-
-        E.cx = 0;
-        E.rx = 0;
-        E.cy++;
     }
+
+    E.cx = E.rx = 0;
+    E.cy++;
+
+    cursor_adjust_viewport();
 }
 
 void command_insert_char(char c) {
@@ -99,6 +99,8 @@ void command_insert_char(char c) {
 
     erow_insert_char(E.current_buf->rows+E.cy, E.cx++, c);
     E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
+
+    cursor_adjust_viewport();
 }
 
 void command_delete_char(void) { // TODO
@@ -125,13 +127,24 @@ void command_delete_char(void) { // TODO
     }
 
     E.rx = erow_cx_to_rx(E.current_buf->rows+E.cy, E.cx);
+
+    cursor_adjust_viewport();
 }
 
 void command_save_buffer(void) {
-    ERRCODE errcode = buffer_write_file(E.current_buf);
+    if (E.current_buf->filename == NULL) {
+        E.current_buf->filename = editor_prompt("Save as: %s (ESC to cancel)");
+        if (E.current_buf->filename == NULL) {
+            editor_set_message("Save aborted");
+            return;
+        }
+    }
+
+    int bytes_written;
+    ERRCODE errcode = buffer_write_file(E.current_buf, &bytes_written);
 
     if (errcode == 0)
-        editor_set_message("Saved file %s", E.current_buf->filename);
+        editor_set_message("%d bytes written", bytes_written);
     else
         editor_set_message("Save failed: ERRCODE %d: %s", errcode, strerror(errno));
 }

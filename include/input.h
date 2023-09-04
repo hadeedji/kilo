@@ -5,6 +5,8 @@
 
 enum KEYS {
     TAB = 9,
+    ENTER = 13,
+    ESCAPE = 27,
     BACKSPACE = 127,
     HOME = 0x100,
     DEL,

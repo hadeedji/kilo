@@ -58,3 +58,40 @@ void editor_set_message(const char *fmt, ...) {
 
   E.message_time = time(NULL);
 }
+
+// TODO: Implement a fully featured line editor
+char *editor_prompt(const char *prompt) {
+    size_t buffer_size = 64;
+    char *buffer = malloc(buffer_size);
+
+    size_t buffer_len = 0;
+    buffer[buffer_len] = '\0';
+
+    while (true) {
+        editor_set_message(prompt, buffer);
+        ui_draw_screen();
+
+        KEY key = terminal_read_key();
+        if (key == ESCAPE) {
+            editor_set_message("");
+            free(buffer);
+            return NULL;
+        } else if (key == ENTER) {
+            if (buffer_len > 0) {
+                editor_set_message("");
+                buffer = realloc(buffer, buffer_len + 1);
+                return buffer;
+            }
+        } else if (isprint(key)) {
+            if (buffer_len >= buffer_size - 1) {
+                buffer_size *= 2;
+                buffer = realloc(buffer, buffer_size);
+            }
+
+            buffer[buffer_len++] = key;
+            buffer[buffer_len] = '\0';
+        }
+    }
+
+    return buffer;
+}

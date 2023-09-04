@@ -21,15 +21,11 @@ void input_process_key(void) {
             command_move_cursor(c);
             break;
 
-        case CTRL_KEY('Q'):
-            command_quit();
-            return;
-
         case CTRL_KEY('S'):
             command_save_buffer();
             break;
 
-        case '\r':
+        case ENTER:
             command_insert_line();
             break;
 
@@ -46,6 +42,11 @@ void input_process_key(void) {
 
         default:
             command_insert_char(c);
+            break;
+
+        case CTRL_KEY('Q'):
+            command_quit();
+            return;
     }
 
     E.quit_times = 3;
