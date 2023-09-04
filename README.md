@@ -4,7 +4,11 @@ Clone of the tiny text editor [kilo][1], written following a [tutorial][2]. Not
 an exact copy of either, and I'm once done with the tutorial I may add more
 features.
 
-## References
+## My additions
+- Split it up into multiple files and tried to follow good design and
+organisation practices.
+
+### References
 - [antirez/kilo][1]
 - [Build Your Own Text Editor][2]
 
