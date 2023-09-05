@@ -1,14 +1,28 @@
 # kilo
 
-Clone of the tiny text editor [kilo][1], written following a [tutorial][2]. Not
-an exact copy of either, and I'm once done with the tutorial I may add more
-features.
+My implementation of the [kilo text editor][1], which I wrote by following
+[this tutorial][2].
+
+## How to build
+
+As simple as it can be, there are no external dependencies.
+
+You can either use the provided Makefile:
+``` sh
+make kilo
+```
+
+Or if you don't have make, just compile and link all the source files together,
+specifying the include directory:
+``` sh
+gcc -I include src/*.c -o kilo
+```
 
 ## My additions
 - Split it up into multiple files and tried to follow good design and
-organisation practices.
+organization practices (WIP).
 
-### References
+## References
 - [antirez/kilo][1]
 - [Build Your Own Text Editor][2]
 
