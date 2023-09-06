@@ -50,7 +50,7 @@ static void ui_draw_rows(struct append_buf *draw_buf) {
         } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
             int len = snprintf(welcome, sizeof(welcome),
-                               "Welcome to kilo! -- v%s", KILO_VERSION);
+                               "Welcome to kilo! -- %s", STRINGIZE(KILO_COMMIT_HASH));
 
             int padding = (E.screencols - len) / 2;
             for (int i = 0; i < padding; i++)

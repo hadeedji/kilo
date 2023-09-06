@@ -1,7 +1,6 @@
 #ifndef KILO_H
 #define KILO_H
 
-#define KILO_VERSION "0.0.1"
 #define KILO_TAB_STOP 4
 
 #include <termios.h>

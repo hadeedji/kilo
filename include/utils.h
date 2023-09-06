@@ -6,6 +6,9 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
+#define _STRINGIZE(x) #x
+#define STRINGIZE(x) _STRINGIZE(x)
+
 typedef int ERRCODE;
 #define RETURN(code) do {errcode = code; goto END;} while(0)
 
