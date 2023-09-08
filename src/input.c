@@ -1,5 +1,3 @@
-#include <stdlib.h>
-
 #include "commands.h"
 #include "input.h"
 #include "kilo.h"

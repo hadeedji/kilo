@@ -3,13 +3,15 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "buffer.h"
-#include "kilo.h"
-#include "ui.h"
 #include "input.h"
+#include "kilo.h"
 #include "terminal.h"
+#include "ui.h"
+#include "utils.h"
 
 void editor_init(char *filename);
 

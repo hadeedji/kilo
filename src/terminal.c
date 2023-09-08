@@ -1,12 +1,18 @@
+// IWYU pragma: no_include <bits/termios-c_cc.h>
+// IWYU pragma: no_include <bits/termios-c_cflag.h>
+// IWYU pragma: no_include <bits/termios-c_iflag.h>
+// IWYU pragma: no_include <bits/termios-c_oflag.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
+#include "input.h"
 #include "kilo.h"
-#include "utils.h"
 #include "terminal.h"
+#include "utils.h"
 
 ERRCODE terminal_enable_raw(void) {
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
