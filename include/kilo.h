@@ -7,8 +7,6 @@
 #include <time.h>
 
 struct editor_state {
-    int cx, cy, rx;
-    int row_off, col_off;
     int screenrows, screencols;
     int quit_times;
 

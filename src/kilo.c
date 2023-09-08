@@ -36,9 +36,6 @@ void editor_init(char *filename) {
 
     if (terminal_enable_raw() == -1) die("term_enable_raw");
 
-    E.cx = E.cy = E.rx = 0;
-    E.row_off = E.col_off = 0;
-
     if (terminal_get_win_size(&E.screenrows, &E.screencols) == -1)
         die("term_get_win_size");
     E.screenrows -= 2;
@@ -61,39 +58,40 @@ void editor_set_message(const char *fmt, ...) {
   E.message_time = time(NULL);
 }
 
-// TODO: Implement a fully featured line editor
+// TODO: Implement a fully featured line editor here
 char *editor_prompt(const char *prompt) {
-    size_t buffer_size = 64;
-    char *buffer = malloc(buffer_size);
+    size_t buf_cap = 64;
+    size_t buf_size = 0;
+    char *buf = malloc(buf_cap);
 
-    size_t buffer_len = 0;
-    buffer[buffer_len] = '\0';
+    buf[buf_size] = '\0';
 
     while (true) {
-        editor_set_message(prompt, buffer);
+        editor_set_message(prompt, buf);
         ui_draw_screen();
 
         KEY key = terminal_read_key();
-        if (key == ESCAPE) {
-            editor_set_message("");
-            free(buffer);
-            return NULL;
-        } else if (key == ENTER) {
-            if (buffer_len > 0) {
-                editor_set_message("");
-                buffer = realloc(buffer, buffer_len + 1);
-                return buffer;
-            }
+        if (key == ESCAPE) goto failure;
+        else if (key == ENTER) {
+            if (buf_size > 0) goto success;
+            else goto failure;
         } else if (isprint(key)) {
-            if (buffer_len >= buffer_size - 1) {
-                buffer_size *= 2;
-                buffer = realloc(buffer, buffer_size);
-            }
+            if (buf_size + 1 >= buf_cap)
+                buf = realloc(buf, buf_cap *= 2);
 
-            buffer[buffer_len++] = key;
-            buffer[buffer_len] = '\0';
+            buf[buf_size] = key;
+            buf_size++;
+            buf[buf_size] = '\0';
         }
     }
 
-    return buffer;
+failure:
+    free(buf);
+    buf = NULL;
+success:
+    if (buf)
+        buf = realloc(buf, buf_size + 1);
+
+    editor_set_message("");
+    return buf;
 }

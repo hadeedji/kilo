@@ -3,5 +3,5 @@ kilo
 
 .cache
 .clangd
+.nvim.lua
 compile_commands.json
-test_file

@@ -28,8 +28,8 @@ void ui_draw_screen(void) {
     write(STDIN_FILENO, draw_buf->chars, draw_buf->n_chars);
     ab_free(draw_buf);
 
-    int row_pos = E.cy - E.row_off + 1;
-    int col_pos = E.rx - E.col_off + 1;
+    int row_pos = E.current_buf->cy - E.current_buf->row_off + 1;
+    int col_pos = E.current_buf->rx - E.current_buf->col_off + 1;
     if (terminal_set_cursor_pos(row_pos, col_pos) == -1)
         die("term_set_cursor_pos");
 
@@ -40,14 +40,17 @@ void ui_draw_screen(void) {
 static void ui_draw_rows(struct append_buf *draw_buf) {
     terminal_set_cursor_pos(1, 1);
     for (int y = 0; y < E.screenrows; y++) {
-        bool in_file = (y < E.current_buf->n_rows - E.row_off);
-        bool no_file = (E.current_buf->n_rows == 0);
+        bool in_file = (y < E.current_buf->n_rows - E.current_buf->row_off);
+        bool no_file = (E.current_buf->filename == NULL && E.current_buf->n_rows == 0);
 
         if (in_file) {
-            struct erow erow = E.current_buf->rows[y + E.row_off];
-            int max_len = MIN(erow.n_rchars - E.col_off, E.screencols);
+            struct erow *crow = buffer_get_crow(E.current_buf);
 
-            ab_append(draw_buf, erow.rchars + E.col_off, MAX(max_len, 0));
+            size_t len = crow->n_rchars - E.current_buf->col_off;
+            len = MIN(len, (size_t) E.screencols);
+            len = MAX(len, 0);
+
+            ab_append(draw_buf, crow->rchars + E.current_buf->col_off, len);
         } else if (no_file && y == E.screenrows / 2) {
             char welcome[64];
             int len = snprintf(welcome, sizeof(welcome),
@@ -78,7 +81,7 @@ static void ui_draw_statusbar(struct append_buf *draw_buf) {
     len = sprintf(buf, "%s %s-- %d lines", display, modified, n_rows);
     memcpy(status_buf, buf, len);
 
-    len = sprintf(buf, "%d:%d", E.cy + 1, E.rx + 1);
+    len = sprintf(buf, "%d:%d", E.current_buf->cy + 1, E.current_buf->rx + 1);
     memcpy(status_buf + E.screencols - len, buf, len);
 
     ab_append(draw_buf, status_buf, E.screencols);
