@@ -20,7 +20,7 @@ gcc -I include src/*.c -o kilo
 
 ## My additions
 - Split it up into multiple files and tried to follow good design and
-organization practices (WIP).
+organization practices.
 
 ## References
 - [antirez/kilo][1]

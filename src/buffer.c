@@ -1,4 +1,6 @@
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "buffer.h"
@@ -36,7 +38,6 @@ ERRCODE buffer_read_file(struct buffer *buffer, const char *filename) {
         buffer_free_rows(buffer);
 
     size_t buf_cap = 64;
-    size_t buf_size = 0;
     char *buf = malloc(buf_cap);
 
     FILE *file = fopen(filename, "r");
@@ -45,6 +46,7 @@ ERRCODE buffer_read_file(struct buffer *buffer, const char *filename) {
 
     while (true) {
         char c;
+        size_t buf_size = 0;
 
         while ((c = getc(file)) != '\n' && c != EOF) {
             if (buf_size >= buf_cap)
@@ -139,7 +141,6 @@ void buffer_insert_row(struct buffer *buffer, struct erow *erow, int at) {
     memmove(buffer->rows + at + 1, buffer->rows + at, sizeof(struct erow *) * (buffer->n_rows - at));
 
     buffer->rows[at] = erow;
-
     buffer->n_rows++;
 }
 
@@ -162,6 +163,12 @@ void buffer_free(struct buffer *buffer) {
     free(buffer->filename);
 
     buffer_free_rows(buffer);
+}
+
+size_t buffer_get_crow_len(struct buffer *buffer) {
+    struct erow *crow = buffer_get_crow(buffer);
+
+    return crow ? crow->n_chars : 0;
 }
 
 static void buffer_free_rows(struct buffer *buffer) {

@@ -1,10 +1,9 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define CTRL_KEY(key) ((key) & 0x1f)
-
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MIN(a,b) (((a)<(b))?(a):(b))
+#define CLAMP(value, min, max) MIN(MAX(value, min), max)
 
 #define _STRINGIZE(x) #x
 #define STRINGIZE(x) _STRINGIZE(x)

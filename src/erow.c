@@ -1,9 +1,11 @@
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "buffer.h"
 #include "erow.h"
 #include "kilo.h"
+#include "utils.h"
 
 static void erow_update_rchars(struct erow *erow);
 
@@ -14,6 +16,8 @@ struct erow *erow_create(const char* chars, size_t n_chars, struct buffer *buffe
     erow->n_chars = n_chars;
 
     memcpy(erow->chars, chars, erow->n_chars);
+
+    erow->rchars = NULL;
     erow_update_rchars(erow);
 
     erow->buffer = buffer;
@@ -23,7 +27,7 @@ struct erow *erow_create(const char* chars, size_t n_chars, struct buffer *buffe
 
 void erow_insert_chars(struct erow *erow, const char *chars, size_t n_chars, int at) {
     erow->chars = realloc(erow->chars, erow->n_chars + n_chars);
-    memmove(erow->chars + at + n_chars, erow->chars + at, n_chars - at);
+    memmove(erow->chars + at + n_chars, erow->chars + at, erow->n_chars - at);
     memcpy(erow->chars + at, chars, n_chars);
 
     erow->n_chars += n_chars;
@@ -34,9 +38,9 @@ void erow_insert_chars(struct erow *erow, const char *chars, size_t n_chars, int
         erow->buffer->modified = true;
 }
 
-void erow_delete_char(struct erow *erow, int at) {
-    memmove(erow->chars + at, erow->chars + at + 1, erow->n_chars - at);
-    erow->chars = realloc(erow->chars, --erow->n_chars);
+void erow_delete_chars(struct erow *erow, size_t n_chars, int at) {
+    memmove(erow->chars + at, erow->chars + at + n_chars, erow->n_chars - at - n_chars);
+    erow->chars = realloc(erow->chars, erow->n_chars -= n_chars);
 
     erow_update_rchars(erow);
 
@@ -45,6 +49,11 @@ void erow_delete_char(struct erow *erow, int at) {
 }
 
 int erow_cx_to_rx(struct erow *erow, int cx) {
+    if (erow == NULL)
+        return 0;
+
+    cx = CLAMP(cx, 0, (int) erow->n_chars);
+
     int rx = 0;
 
     for (char *c = erow->chars; c < erow->chars + cx; c++) {
@@ -58,16 +67,17 @@ int erow_cx_to_rx(struct erow *erow, int cx) {
 }
 
 int erow_rx_to_cx(struct erow *erow, int rx) {
-    if ((size_t) rx >= erow->n_rchars)
-        return erow->n_chars;
+    if (erow == NULL)
+        return 0;
 
-    int c_rx = 0;
-
-    for (int cx = 0; (size_t) cx < erow->n_chars; cx++) {
+    int cx = 0, c_rx = 0;
+    while ((size_t) cx < erow->n_chars) {
         if (erow->chars[cx] == '\t')
             c_rx += KILO_TAB_STOP - (c_rx % KILO_TAB_STOP);
         else
             c_rx++;
+
+        cx++;
 
         if (c_rx >= rx)
             return cx;
@@ -86,7 +96,7 @@ static void erow_update_rchars(struct erow *erow) {
         free(erow->rchars);
 
     size_t n_rchars_max = 16;
-    erow->rchars = malloc(erow->n_rchars);
+    erow->rchars = malloc(n_rchars_max);
     erow->n_rchars = 0;
 
     for (char *c = erow->chars; c < erow->chars + erow->n_chars; c++) {

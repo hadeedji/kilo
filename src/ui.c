@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "buffer.h"
+#include "erow.h"
 #include "kilo.h"
 #include "terminal.h"
 #include "ui.h"
@@ -44,7 +45,7 @@ static void ui_draw_rows(struct append_buf *draw_buf) {
         bool no_file = (E.current_buf->filename == NULL && E.current_buf->n_rows == 0);
 
         if (in_file) {
-            struct erow *crow = buffer_get_crow(E.current_buf);
+            struct erow *crow = E.current_buf->rows[y + E.current_buf->row_off];
 
             size_t len = crow->n_rchars - E.current_buf->col_off;
             len = MIN(len, (size_t) E.screencols);

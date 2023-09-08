@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define CTRL_KEY(key) ((key) & 0x1f)
+
 enum KEYS {
     TAB = 9,
     ENTER = 13,
@@ -21,6 +23,6 @@ enum KEYS {
 };
 typedef uint16_t KEY;
 
-void input_process_key(void);
+void input_process_key(KEY c);
 
 #endif // INPUT_H

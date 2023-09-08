@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
 
     while (true) {
         ui_draw_screen();
-        input_process_key();
+        input_process_key(terminal_read_key());
     }
 
     return 0;

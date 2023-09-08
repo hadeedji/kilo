@@ -1,12 +1,8 @@
 #include "commands.h"
 #include "input.h"
 #include "kilo.h"
-#include "terminal.h"
-#include "utils.h"
 
-void input_process_key(void) {
-    KEY c = terminal_read_key();
-
+void input_process_key(KEY c) {
     switch (c) {
         case ARROW_LEFT:
         case ARROW_DOWN:
@@ -20,7 +16,7 @@ void input_process_key(void) {
             break;
 
         case CTRL_KEY('S'):
-            command_save_buffer();
+            // command_save_buffer();
             break;
 
         case ENTER:
@@ -28,7 +24,7 @@ void input_process_key(void) {
             break;
 
         case DEL:
-            command_move_cursor(ARROW_RIGHT);
+            input_process_key(ARROW_RIGHT);
         case BACKSPACE:
         case CTRL_KEY('H'):
             command_delete_char();
