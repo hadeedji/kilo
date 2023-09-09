@@ -16,7 +16,7 @@ void input_process_key(KEY c) {
             break;
 
         case CTRL_KEY('S'):
-            // command_save_buffer();
+            command_save_buffer();
             break;
 
         case ENTER:
