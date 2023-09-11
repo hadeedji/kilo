@@ -55,9 +55,8 @@ int erow_cx_to_rx(struct erow *erow, int cx) {
     cx = CLAMP(cx, 0, (int) erow->n_chars);
 
     int rx = 0;
-
-    for (char *c = erow->chars; c < erow->chars + cx; c++) {
-        if (*c == '\t')
+    for (int c_cx = 0; c_cx < cx; c_cx++) {
+        if (erow->chars[c_cx] == '\t')
             rx += KILO_TAB_STOP - (rx % KILO_TAB_STOP);
         else
             rx++;
@@ -70,20 +69,17 @@ int erow_rx_to_cx(struct erow *erow, int rx) {
     if (erow == NULL)
         return 0;
 
-    int cx = 0, c_rx = 0;
-    while ((size_t) cx < erow->n_chars) {
+    rx = CLAMP(rx, 0, (int) erow->n_rchars);
+
+    int cx = 0;
+    for (int c_rx = 0; c_rx < rx; cx++) {
         if (erow->chars[cx] == '\t')
             c_rx += KILO_TAB_STOP - (c_rx % KILO_TAB_STOP);
         else
             c_rx++;
-
-        cx++;
-
-        if (c_rx >= rx)
-            return cx;
     }
 
-    return erow->n_chars;
+    return cx;
 }
 
 void erow_free(struct erow *erow) {

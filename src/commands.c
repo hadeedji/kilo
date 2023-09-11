@@ -82,6 +82,7 @@ void command_insert_char(char c) {
     input_process_key(ARROW_RIGHT);
 }
 
+// TODO: Is this many simulated keypresses necessary? Is it bad?
 void command_delete_char(void) {
     if (E.current_buf->cy == E.current_buf->n_rows)
         input_process_key(ARROW_LEFT);
@@ -94,6 +95,7 @@ void command_delete_char(void) {
 
         struct erow *prow = E.current_buf->rows[E.current_buf->cy - 1];
 
+        input_process_key(HOME);
         input_process_key(ARROW_UP);
         cursor_move(E.current_buf, prow->n_chars, 0);
 
