@@ -77,6 +77,9 @@ int erow_rx_to_cx(struct erow *erow, int rx) {
             c_rx += KILO_TAB_STOP - (c_rx % KILO_TAB_STOP);
         else
             c_rx++;
+
+        if (c_rx > rx)
+            break;
     }
 
     return cx;
