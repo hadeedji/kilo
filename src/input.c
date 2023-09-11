@@ -31,6 +31,7 @@ void input_process_key(KEY c) {
             break;
 
         case CTRL_KEY('L'):
+        case ESCAPE:
         case NOP:
             break;
 

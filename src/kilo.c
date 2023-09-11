@@ -71,17 +71,27 @@ char *editor_prompt(const char *prompt) {
         ui_draw_screen();
 
         KEY key = terminal_read_key();
-        if (key == ESCAPE) goto failure;
-        else if (key == ENTER) {
-            if (buf_size > 0) goto success;
-            else goto failure;
-        } else if (isprint(key)) {
-            if (buf_size + 1 >= buf_cap)
-                buf = realloc(buf, buf_cap *= 2);
+        switch (key) {
+            case BACKSPACE:
+                if (buf_size > 0)
+                    buf[--buf_size] = '\0';
+                break;
+            case ENTER:
+                if (buf_size > 0) goto success;
+                else goto failure;
+                break;
+            case ESCAPE:
+                goto failure;
+                break;
+            default:
+                if (isprint(key)) {
+                    if (buf_size + 1 >= buf_cap)
+                        buf = realloc(buf, buf_cap *= 2);
 
-            buf[buf_size] = key;
-            buf_size++;
-            buf[buf_size] = '\0';
+                    buf[buf_size] = key;
+                    buf_size++;
+                    buf[buf_size] = '\0';
+                }
         }
     }
 
