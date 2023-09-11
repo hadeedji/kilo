@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -58,17 +59,23 @@ void editor_set_message(const char *fmt, ...) {
   E.message_time = time(NULL);
 }
 
-// TODO: Implement a fully featured line editor here
+// TODO: This could use some work
 char *editor_prompt(const char *prompt) {
     size_t buf_cap = 64;
     size_t buf_size = 0;
     char *buf = malloc(buf_cap);
+
+    char *prompt_prefix = strstr(prompt, "%s");
+    int prefix_len = (prompt_prefix ? prompt_prefix - prompt : 0);
 
     buf[buf_size] = '\0';
 
     while (true) {
         editor_set_message(prompt, buf);
         ui_draw_screen();
+
+        if (prompt_prefix)
+            terminal_set_cursor_pos(E.screenrows + 2, prefix_len + buf_size + 1);
 
         KEY key = terminal_read_key();
         switch (key) {

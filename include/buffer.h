@@ -7,8 +7,6 @@
 #include "erow.h"
 #include "utils.h"
 
-struct erow;
-
 struct buffer {
     char *filename;
 
@@ -29,6 +27,5 @@ void buffer_delete_row(struct buffer *buffer, int at);
 struct erow *buffer_get_crow(struct buffer *buffer);
 size_t buffer_get_crow_len(struct buffer *buffer);
 void buffer_free(struct buffer *buffer);
-
 
 #endif // BUFFER_H

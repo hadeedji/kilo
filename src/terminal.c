@@ -1,8 +1,3 @@
-// IWYU pragma: no_include <bits/termios-c_cc.h>
-// IWYU pragma: no_include <bits/termios-c_cflag.h>
-// IWYU pragma: no_include <bits/termios-c_iflag.h>
-// IWYU pragma: no_include <bits/termios-c_oflag.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
@@ -158,3 +153,7 @@ KEY terminal_read_key(void) {
     return (KEY) c;
 }
 
+// IWYU pragma: no_include <bits/termios-c_cc.h>
+// IWYU pragma: no_include <bits/termios-c_cflag.h>
+// IWYU pragma: no_include <bits/termios-c_iflag.h>
+// IWYU pragma: no_include <bits/termios-c_oflag.h>
