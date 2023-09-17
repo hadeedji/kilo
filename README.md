@@ -1,7 +1,7 @@
 # kilo
 
 My implementation of the [kilo text editor][1], which I wrote by following
-[this tutorial][2].
+[this tutorial][2]. The current state is horribly bugged, regrettably so.
 
 ## How to build
 
