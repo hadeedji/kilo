@@ -186,14 +186,16 @@ static char *buffer_get_string(struct buffer *buffer, size_t *n_chars) {
 
     for (int i = 0; i < buffer->n_rows; i++)
         *n_chars += buffer->rows[i]->n_chars + 1;
+    *n_chars -= 1;
 
     char *write_buffer = malloc(*n_chars);
-    for (int i = 0, j = 0; i < buffer->n_rows; j++, i++) {
+    for (int i = 0, j = 0; i < buffer->n_rows; i++) {
         struct erow *row = buffer->rows[i];
 
         memcpy(write_buffer + j, row->chars, row->n_chars);
         j += row->n_chars;
-        write_buffer[j++] = '\n';
+        if (i < buffer->n_rows - 1)
+            write_buffer[j++] = '\n';
     }
 
     return write_buffer;
