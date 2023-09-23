@@ -62,6 +62,9 @@ ERRCODE buffer_read_file(struct buffer *buffer, const char *filename) {
             break;
     }
 
+    if (buffer->rows[buffer->n_rows - 1]->n_chars == 0)
+        buffer_delete_row(buffer, buffer->n_rows - 1);
+
 END:
     if (file != NULL)
         fclose(file);
@@ -186,7 +189,6 @@ static char *buffer_get_string(struct buffer *buffer, size_t *n_chars) {
 
     for (int i = 0; i < buffer->n_rows; i++)
         *n_chars += buffer->rows[i]->n_chars + 1;
-    *n_chars -= 1;
 
     char *write_buffer = malloc(*n_chars);
     for (int i = 0, j = 0; i < buffer->n_rows; i++) {
@@ -194,8 +196,7 @@ static char *buffer_get_string(struct buffer *buffer, size_t *n_chars) {
 
         memcpy(write_buffer + j, row->chars, row->n_chars);
         j += row->n_chars;
-        if (i < buffer->n_rows - 1)
-            write_buffer[j++] = '\n';
+        write_buffer[j++] = '\n';
     }
 
     return write_buffer;
