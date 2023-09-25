@@ -25,6 +25,7 @@ void input_process_key(KEY c) {
 
         case DEL:
             input_process_key(ARROW_RIGHT);
+            // fall through
         case BACKSPACE:
         case CTRL_KEY('H'):
             command_delete_char();
