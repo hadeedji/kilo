@@ -1,4 +1,7 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <ctype.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -15,6 +18,7 @@
 #include "utils.h"
 
 void editor_init(char *filename);
+void editor_resize();
 
 struct editor_state E;
 
@@ -39,7 +43,6 @@ void editor_init(char *filename) {
 
     if (terminal_get_win_size(&E.screenrows, &E.screencols) == -1)
         die("term_get_win_size");
-    E.screenrows -= 2;
     E.quit_times = 3;
 
     E.current_buf = buffer_create();
@@ -48,6 +51,10 @@ void editor_init(char *filename) {
 
     editor_set_message("Welcome to kilo! | CTRL-Q: Quit | CTRL-S: SAVE");
     terminal_clear();
+
+    struct sigaction sa;
+    sa.sa_handler = editor_resize;
+    sigaction(SIGWINCH, &sa, NULL);
 }
 
 void editor_set_message(const char *fmt, ...) {
@@ -111,4 +118,11 @@ success:
 
     editor_set_message("");
     return buf;
+}
+
+void editor_resize() {
+    if (terminal_get_win_size(&E.screenrows, &E.screencols) == -1)
+        die("term_get_win_size");
+
+    ui_draw_screen();
 }

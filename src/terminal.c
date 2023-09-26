@@ -48,7 +48,7 @@ ERRCODE terminal_get_win_size(int *row, int *col) {
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col != 0) {
-        *row = ws.ws_row;
+        *row = ws.ws_row - 2;
         *col = ws.ws_col;
 
         return 0;
@@ -56,7 +56,14 @@ ERRCODE terminal_get_win_size(int *row, int *col) {
         // Fallback implementation
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) return -1;
 
-        return terminal_get_cursor_pos(row, col);
+        int _row, _col;
+        ERRCODE get_err = terminal_get_cursor_pos(&_row, &_col);
+        if (get_err == 0) {
+            *row = _row - 2;
+            *col = _col;
+        }
+
+        return get_err;
     }
 }
 
@@ -90,8 +97,13 @@ ERRCODE terminal_set_cursor_pos(int row, int col) {
 
 KEY terminal_read_key(void) {
     char c;
-    int n;
-    while (read(STDIN_FILENO, &c, 1) == 0);
+
+    ssize_t read_return = 0;
+    while (read_return == 0)
+        read_return = read(STDIN_FILENO, &c, 1);
+
+    if (read_return == -1)
+        return NOP;
 
     if (c == '\x1b') {
         char buf[8] = { '\0' };
@@ -105,7 +117,7 @@ KEY terminal_read_key(void) {
             char escape_char;
             int escape_int;
 
-            n = 0;
+            int n = 0;
             sscanf(buf, "[%c%n", &escape_char, &n);
             if (n > 0) {
                 switch (escape_char) {

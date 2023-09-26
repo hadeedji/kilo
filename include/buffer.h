@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "erow.h"
 #include "utils.h"
 
+struct erow;
 struct buffer {
     char *filename;
 
