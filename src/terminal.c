@@ -22,12 +22,16 @@ ERRCODE terminal_enable_raw(void) {
     raw.c_cc[VTIME] = 1;
 
     atexit(terminal_disable_raw);
+    write(STDIN_FILENO, "\x1b[?1049h", 8);
+
     return tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 void terminal_disable_raw(void) {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
         die ("term_disable_raw");
+
+    write(STDIN_FILENO, "\x1b[?1049l", 8);
 }
 
 ERRCODE terminal_clear(void) {
