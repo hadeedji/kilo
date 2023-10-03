@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 199309L
 
 #include <ctype.h>
+#include <errno.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -51,6 +52,7 @@ void editor_init(char *filename) {
 
     editor_set_message("Welcome to kilo! | CTRL-Q: Quit | CTRL-S: SAVE");
     terminal_clear();
+    error_message = NULL;
 
     struct sigaction sa;
     sa.sa_handler = editor_resize;
@@ -125,4 +127,20 @@ void editor_resize() {
         die("term_get_win_size");
 
     ui_draw_screen();
+}
+
+/*****************************************************************************/
+
+char *error_message;
+
+void error_set_message(const char *prefix) {
+    if (error_message)
+        free(error_message);
+
+    const char *strerror_msg = strerror(errno);
+    const char *fmt = "%s: %s\n";
+    size_t len = strlen(prefix) + 2 + strlen(strerror_msg) + 2;
+
+    error_message = malloc(len);
+    snprintf(error_message, len, fmt, prefix, strerror_msg);
 }

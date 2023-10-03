@@ -1,5 +1,7 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -8,6 +10,34 @@
 #include "kilo.h"
 #include "terminal.h"
 #include "utils.h"
+
+static void terminal_disable_raw(void) {
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
+        die ("term_disable_raw");
+
+    write(STDIN_FILENO, "\x1b[?1049l", 8);
+
+    if (error_message) {
+        write(STDERR_FILENO, error_message, strlen(error_message));
+        free(error_message);
+    }
+}
+
+static char terminal_read_char(void) {
+    char c;
+
+    ssize_t read_return;
+    do {
+        read_return = read(STDIN_FILENO, &c, 1);
+    } while(read_return == 0 || (read_return == -1 && errno == EINTR));
+
+    if (read_return == -1) {
+        error_set_message("read");
+        exit(1);
+    }
+
+    return c;
+}
 
 ERRCODE terminal_enable_raw(void) {
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
@@ -25,13 +55,6 @@ ERRCODE terminal_enable_raw(void) {
     write(STDIN_FILENO, "\x1b[?1049h", 8);
 
     return tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
-
-void terminal_disable_raw(void) {
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
-        die ("term_disable_raw");
-
-    write(STDIN_FILENO, "\x1b[?1049l", 8);
 }
 
 ERRCODE terminal_clear(void) {
@@ -100,14 +123,7 @@ ERRCODE terminal_set_cursor_pos(int row, int col) {
 }
 
 KEY terminal_read_key(void) {
-    char c;
-
-    ssize_t read_return = 0;
-    while (read_return == 0)
-        read_return = read(STDIN_FILENO, &c, 1);
-
-    if (read_return == -1)
-        return NOP;
+    char c = terminal_read_char();
 
     if (c == '\x1b') {
         char buf[8] = { '\0' };

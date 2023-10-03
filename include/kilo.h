@@ -21,4 +21,7 @@ extern struct editor_state E;
 void editor_set_message(const char *fmt, ...);
 char *editor_prompt(const char *prompt);
 
+extern char *error_message;
+void error_set_message(const char *prefix);
+
 #endif // KILO_H
